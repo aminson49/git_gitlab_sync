@@ -227,9 +227,8 @@ class RepoSyncer:
                                         capture_output=True, text=True, check=False
                                     )
                                 
-                                # After merge, ensure we still match GitHub exactly
-                                print(f"     Ensuring final state matches GitHub exactly...")
-                                subprocess.run(['git', 'reset', '--hard', f'origin/{branch}'], capture_output=True)
+                                # After merge, ensure files match GitHub exactly (but keep the merge commit)
+                                print(f"     Ensuring files match GitHub exactly...")
                                 
                                 # Remove files not in GitHub
                                 current_files_result = subprocess.run(
@@ -247,11 +246,11 @@ class RepoSyncer:
                                     for file in files_to_remove:
                                         subprocess.run(['git', 'rm', '--cached', '--ignore-unmatch', file], capture_output=True)
                                 
-                                # Checkout all GitHub files
+                                # Checkout all GitHub files (this updates files but keeps the merge commit)
                                 subprocess.run(['git', 'checkout', f'origin/{branch}', '--', '.'], capture_output=True)
                                 subprocess.run(['git', 'add', '-A'], capture_output=True)
                                 
-                                # Create final commit
+                                # Create final commit if there are changes
                                 final_status = subprocess.run(
                                     ['git', 'status', '--porcelain'],
                                     capture_output=True, text=True, check=True
@@ -261,6 +260,39 @@ class RepoSyncer:
                                         ['git', 'commit', '-m', f'Sync from GitHub - ensure exact match [skip sync]'],
                                         capture_output=True, text=True, check=False
                                     )
+                                
+                                # Fetch latest from GitLab to ensure we're up to date
+                                print(f"     Fetching latest from GitLab...")
+                                subprocess.run(['git', 'fetch', 'gitlab', branch], capture_output=True)
+                                
+                                # Check if we're ahead or behind
+                                behind_check = subprocess.run(
+                                    ['git', 'rev-list', '--left-right', '--count', f'HEAD...gitlab/{branch}'],
+                                    capture_output=True, text=True, check=True
+                                )
+                                behind_ahead = behind_check.stdout.strip().split()
+                                if len(behind_ahead) == 2:
+                                    behind = int(behind_ahead[0])
+                                    ahead = int(behind_ahead[1])
+                                    if behind > 0:
+                                        print(f"     Still behind GitLab by {behind} commit(s), merging again...")
+                                        merge_again = subprocess.run(
+                                            ['git', 'merge', f'gitlab/{branch}', '--no-edit', '--no-ff', '-X', 'ours'],
+                                            capture_output=True, text=True, check=False
+                                        )
+                                        if merge_again.returncode == 0:
+                                            # Ensure files still match GitHub
+                                            subprocess.run(['git', 'checkout', f'origin/{branch}', '--', '.'], capture_output=True)
+                                            subprocess.run(['git', 'add', '-A'], capture_output=True)
+                                            status_after = subprocess.run(
+                                                ['git', 'status', '--porcelain'],
+                                                capture_output=True, text=True, check=True
+                                            )
+                                            if status_after.stdout.strip():
+                                                subprocess.run(
+                                                    ['git', 'commit', '-m', f'Sync from GitHub - exact match [skip sync]'],
+                                                    capture_output=True, text=True, check=False
+                                                )
                                 
                                 print(f"     Pushing to GitLab...")
                                 push_result = subprocess.run(
