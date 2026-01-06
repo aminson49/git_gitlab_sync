@@ -341,6 +341,16 @@ The `sync_activities.py` script can sync issues, milestones, labels, etc. It's a
 - ✅ Verify all variables are set: `GITHUB_TOKEN`, `GITLAB_TOKEN`, `GITHUB_REPO`, `GITLAB_REPO`
 - ✅ Check for typos (variable names are case-sensitive)
 
+**"403 Forbidden" when pushing to GitLab:**
+- ✅ **Most common issue!** Your GitLab token needs BOTH scopes:
+  - `api` (full API access)
+  - `write_repository` (write repository content)
+- ✅ Go to GitLab → Preferences → Access Tokens
+- ✅ Create a NEW token with both `api` AND `write_repository` scopes checked
+- ✅ Update `GITLAB_TOKEN` in CircleCI with the new token
+- ✅ Verify the token owner has access to the repository (at least Developer role)
+- ✅ For self-hosted GitLab, you may need to set `GITLAB_API_BASE` environment variable
+
 ### General Issues
 
 - **Auth errors**: Check your tokens have the right permissions (`repo` for GitHub, `write_repository` for GitLab)
