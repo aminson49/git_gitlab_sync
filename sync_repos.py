@@ -36,7 +36,7 @@ class RepoSyncer:
     
     def sync_code(self, direction='both'):
         """Sync code between repos"""
-        print(f"🔄 Syncing code ({direction})...")
+        print(f"Syncing code ({direction})...")
         
         if direction in ['github-to-gitlab', 'both']:
             self._sync_to_gitlab()
@@ -47,10 +47,10 @@ class RepoSyncer:
     def _sync_to_gitlab(self):
         """Push code from GitHub to GitLab"""
         if not GITHUB_REPO or not GITLAB_REPO:
-            print("❌ Need to set GITHUB_REPO and GITLAB_REPO env vars")
+            print("Error: Need to set GITHUB_REPO and GITLAB_REPO env vars")
             return
         
-        print(f"📤 Syncing {GITHUB_REPO} → {GITLAB_REPO}")
+        print(f"Syncing {GITHUB_REPO} -> {GITLAB_REPO}")
         
         try:
             # Build URLs with tokens if we have them
@@ -102,78 +102,65 @@ class RepoSyncer:
             
             for branch in branches:
                 try:
-                    # Create local branch from origin if it doesn't exist, or checkout if it does
                     local_branch_check = subprocess.run(
                         ['git', 'branch', '--list', branch],
                         capture_output=True, text=True
                     )
                     if not local_branch_check.stdout.strip():
-                        # Branch doesn't exist locally, create it from origin
                         print(f"  Creating local branch {branch} from origin/{branch}...")
                         checkout_result = subprocess.run(
                             ['git', 'checkout', '-b', branch, f'origin/{branch}'], 
                             capture_output=True, text=True, check=False
                         )
                         if checkout_result.returncode != 0:
-                            print(f"  ⚠️  Could not create branch {branch}: {checkout_result.stderr}")
+                            print(f"  Warning: Could not create branch {branch}: {checkout_result.stderr}")
                             continue
                     else:
-                        # Branch exists, checkout and update it
                         checkout_result = subprocess.run(
                             ['git', 'checkout', branch], 
                             capture_output=True, text=True, check=False
                         )
                         if checkout_result.returncode != 0:
-                            print(f"  ⚠️  Could not checkout branch {branch}: {checkout_result.stderr}")
+                            print(f"  Warning: Could not checkout branch {branch}: {checkout_result.stderr}")
                             continue
                         reset_result = subprocess.run(
                             ['git', 'reset', '--hard', f'origin/{branch}'], 
                             capture_output=True, text=True, check=False
                         )
                         if reset_result.returncode != 0:
-                            print(f"  ⚠️  Could not reset branch {branch}: {reset_result.stderr}")
+                            print(f"  Warning: Could not reset branch {branch}: {reset_result.stderr}")
                             continue
                     
-                    # Check if GitLab has this branch and if it has different commits
                     gitlab_branch_exists = subprocess.run(
                         ['git', 'ls-remote', '--heads', 'gitlab', branch],
                         capture_output=True, text=True
                     ).stdout.strip()
                     
-                    # Try to push first (fast-forward case)
                     result = subprocess.run(['git', 'push', 'gitlab', branch], 
                                           capture_output=True, text=True, check=False)
                     
                     if result.returncode == 0:
-                        print(f"  ✅ Synced branch: {branch}")
+                        print(f"  Synced branch: {branch}")
                     else:
                         error_msg = result.stderr or result.stdout
-                        
-                        # Check if branch is protected or has diverged
                         is_protected = 'protected branch' in error_msg or 'not allowed to force push' in error_msg
                         is_diverged = 'rejected' in error_msg and ('fetch first' in error_msg or 'non-fast-forward' in error_msg)
                         
                         if is_protected or is_diverged:
-                            # For protected branches or diverged branches, merge first then push
-                            print(f"  ⚠️  Branch {branch} needs merge (protected or diverged)")
+                            print(f"  Branch {branch} needs merge (protected or diverged)")
                             
                             if gitlab_branch_exists:
                                 print(f"     Merging GitLab's changes into local branch...")
-                                # Fetch latest from GitLab
                                 subprocess.run(['git', 'fetch', 'gitlab', branch], capture_output=True)
                                 
-                                # Try to merge GitLab's version, preferring GitHub's version on conflicts
                                 merge_result = subprocess.run(
                                     ['git', 'merge', f'gitlab/{branch}', '--no-edit', '--no-ff', '-X', 'ours', '--strategy-option=theirs'],
                                     capture_output=True, text=True, check=False
                                 )
                                 
-                                # If merge fails due to conflicts, try with ours strategy (GitHub wins)
                                 if merge_result.returncode != 0:
                                     print(f"     Merge had conflicts, using GitHub version...")
-                                    # Abort the failed merge
                                     subprocess.run(['git', 'merge', '--abort'], capture_output=True)
-                                    # Try merge with ours strategy (GitHub version wins)
                                     merge_result = subprocess.run(
                                         ['git', 'merge', f'gitlab/{branch}', '--no-edit', '--no-ff', '-X', 'ours'],
                                         capture_output=True, text=True, check=False
@@ -181,53 +168,42 @@ class RepoSyncer:
                                 
                                 if merge_result.returncode == 0:
                                     print(f"     Merge successful, pushing to GitLab...")
-                                    # Now try to push the merged result
                                     push_result = subprocess.run(
                                         ['git', 'push', 'gitlab', branch],
                                         capture_output=True, text=True, check=False
                                     )
                                     if push_result.returncode == 0:
-                                        print(f"  ✅ Synced branch: {branch} (merged and pushed)")
+                                        print(f"  Synced branch: {branch} (merged and pushed)")
                                     else:
                                         push_error = push_result.stderr or push_result.stdout
                                         if 'protected branch' in push_error:
-                                            print(f"  ❌ Cannot sync branch {branch} - it's protected and merge push failed")
-                                            print(f"     Options:")
-                                            print(f"     1. Unprotect the branch in GitLab (Settings → Repository → Protected Branches)")
-                                            print(f"     2. Give your token permission to push to protected branches")
-                                            print(f"     3. Manually merge GitHub changes into GitLab")
+                                            print(f"  Error: Cannot sync branch {branch} - it's protected")
+                                            print(f"     Unprotect the branch in GitLab or give token permission")
                                         else:
-                                            print(f"  ⚠️  Push failed after merge: {push_error[:200]}")
+                                            print(f"  Warning: Push failed after merge: {push_error[:200]}")
                                 else:
-                                    print(f"  ⚠️  Could not merge GitLab changes: {merge_result.stderr[:200]}")
-                                    print(f"     You may need to manually resolve conflicts")
+                                    print(f"  Warning: Could not merge GitLab changes: {merge_result.stderr[:200]}")
                             else:
-                                # Branch doesn't exist on GitLab, but push failed - might be protected branch creation
                                 if is_protected:
-                                    print(f"  ❌ Cannot create protected branch {branch}")
-                                    print(f"     Unprotect it first or use a different branch name")
+                                    print(f"  Error: Cannot create protected branch {branch}")
                                 else:
-                                    print(f"  ⚠️  Push failed for unknown reason: {error_msg[:200]}")
+                                    print(f"  Warning: Push failed: {error_msg[:200]}")
                         elif 'deny updating a hidden ref' in error_msg:
-                            print(f"  ⚠️  Skipping branch {branch} - appears to be a hidden ref")
+                            print(f"  Skipping branch {branch} - hidden ref")
                         elif '403' in error_msg or 'Forbidden' in error_msg:
-                            print(f"  ❌ Failed to sync branch {branch}: 403 Forbidden")
-                            print(f"     This means your GitLab token doesn't have write permissions.")
-                            print(f"     Fix: Create a new token with BOTH 'api' AND 'write_repository' scopes")
-                            print(f"     Then update GITLAB_TOKEN in CircleCI environment variables")
+                            print(f"  Error: 403 Forbidden - check token permissions")
                         elif '401' in error_msg or 'Unauthorized' in error_msg:
-                            print(f"  ❌ Failed to sync branch {branch}: Authentication failed")
-                            print(f"     Check that GITLAB_TOKEN is correct and not expired")
+                            print(f"  Error: Authentication failed - check token")
                         else:
-                            print(f"  ⚠️  Failed to sync branch {branch}: {error_msg[:200]}")
+                            print(f"  Warning: Failed to sync branch {branch}: {error_msg[:200]}")
                 except subprocess.CalledProcessError as e:
-                    print(f"  ⚠️  Failed to sync branch {branch}: {e}")
+                    print(f"  Warning: Failed to sync branch {branch}: {e}")
             
             os.chdir('..')
-            print("✅ Done syncing to GitLab")
+            print("Done syncing to GitLab")
             
         except Exception as e:
-            print(f"❌ Error: {e}")
+            print(f"Error: {e}")
     
     def _sync_to_github(self):
         """Push code from GitLab to GitHub"""
@@ -235,7 +211,7 @@ class RepoSyncer:
             print("❌ Need to set GITHUB_REPO and GITLAB_REPO env vars")
             return
         
-        print(f"📤 Syncing {GITLAB_REPO} → {GITHUB_REPO}")
+        print(f"Syncing {GITLAB_REPO} -> {GITHUB_REPO}")
         
         try:
             if GITHUB_TOKEN:
@@ -276,19 +252,19 @@ class RepoSyncer:
                 try:
                     subprocess.run(['git', 'checkout', branch], check=True, capture_output=True)
                     subprocess.run(['git', 'push', 'github', branch], check=True)
-                    print(f"  ✅ Synced branch: {branch}")
+                    print(f"  Synced branch: {branch}")
                 except subprocess.CalledProcessError as e:
-                    print(f"  ⚠️  Failed to sync branch {branch}: {e}")
+                    print(f"  Warning: Failed to sync branch {branch}: {e}")
             
             os.chdir('..')
-            print("✅ Done syncing to GitHub")
+            print("Done syncing to GitHub")
             
         except Exception as e:
             print(f"❌ Error: {e}")
     
     def sync_issues(self, direction='both'):
         """Sync issues between the two platforms"""
-        print(f"🔄 Syncing issues ({direction})...")
+        print(f"Syncing issues ({direction})...")
         
         if direction in ['github-to-gitlab', 'both']:
             self._sync_issues_to_gitlab()
@@ -301,37 +277,32 @@ class RepoSyncer:
         if not GITHUB_REPO or not GITLAB_REPO:
             return
         
-        print(f"📋 Syncing issues: {GITHUB_REPO} → {GITLAB_REPO}")
+        print(f"Syncing issues: {GITHUB_REPO} -> {GITLAB_REPO}")
         
         try:
-            # Fetch GitHub issues
             url = f"{GITHUB_API_BASE}/repos/{GITHUB_REPO}/issues"
             response = requests.get(url, headers=self.github_headers, params={'state': 'all'})
             if response.status_code != 200:
-                print(f"❌ Failed to get GitHub issues: {response.status_code}")
+                print(f"Error: Failed to get GitHub issues: {response.status_code}")
                 return
             issues = response.json()
             
-            # Need GitLab project ID
             gitlab_project_id = self._get_gitlab_project_id()
             if not gitlab_project_id:
-                print("❌ Couldn't find GitLab project")
+                print("Error: Couldn't find GitLab project")
                 return
             
             gitlab_issues_url = f"{GITLAB_API_BASE}/projects/{gitlab_project_id}/issues"
             
             for issue in issues:
-                # Skip pull requests
                 if 'pull_request' in issue:
                     continue
                 
-                # Check if we already have this issue
                 existing = requests.get(gitlab_issues_url, headers=self.gitlab_headers,
                                       params={'search': issue['title']})
                 if existing.json():
-                    continue  # Already exists
+                    continue
                 
-                # Create it in GitLab
                 labels = ','.join([label['name'] for label in issue.get('labels', [])])
                 data = {
                     'title': f"[GitHub] {issue['title']}",
@@ -341,41 +312,38 @@ class RepoSyncer:
                 
                 resp = requests.post(gitlab_issues_url, headers=self.gitlab_headers, json=data)
                 if resp.status_code == 201:
-                    print(f"  ✅ Synced issue: {issue['title']}")
+                    print(f"  Synced issue: {issue['title']}")
                 else:
-                    print(f"  ⚠️  Failed to sync issue: {issue['title']}")
+                    print(f"  Warning: Failed to sync issue: {issue['title']}")
                 
         except Exception as e:
-            print(f"❌ Error: {e}")
+            print(f"Error: {e}")
     
     def _sync_issues_to_github(self):
         """Copy issues from GitLab to GitHub"""
         if not GITHUB_REPO or not GITLAB_REPO:
             return
         
-        print(f"📋 Syncing issues: {GITLAB_REPO} → {GITHUB_REPO}")
+        print(f"Syncing issues: {GITLAB_REPO} -> {GITHUB_REPO}")
         
         try:
             gitlab_project_id = self._get_gitlab_project_id()
             if not gitlab_project_id:
                 return
             
-            # Get GitLab issues
             url = f"{GITLAB_API_BASE}/projects/{gitlab_project_id}/issues"
             response = requests.get(url, headers=self.gitlab_headers, params={'state': 'all'})
             if response.status_code != 200:
-                print(f"❌ Failed to get GitLab issues: {response.status_code}")
+                print(f"Error: Failed to get GitLab issues: {response.status_code}")
                 return
             issues = response.json()
             
             github_url = f"{GITHUB_API_BASE}/repos/{GITHUB_REPO}/issues"
             
             for issue in issues:
-                # Skip ones we already synced from GitHub
                 if '[GitHub]' in issue.get('title', ''):
                     continue
                 
-                # Create in GitHub
                 data = {
                     'title': f"[GitLab] {issue['title']}",
                     'body': f"{issue.get('description', '')}\n\n---\n*Synced from GitLab: {issue['web_url']}*",
@@ -384,12 +352,12 @@ class RepoSyncer:
                 
                 resp = requests.post(github_url, headers=self.github_headers, json=data)
                 if resp.status_code == 201:
-                    print(f"  ✅ Synced issue: {issue['title']}")
+                    print(f"  Synced issue: {issue['title']}")
                 else:
-                    print(f"  ⚠️  Failed to sync issue: {issue['title']}")
+                    print(f"  Warning: Failed to sync issue: {issue['title']}")
                 
         except Exception as e:
-            print(f"❌ Error: {e}")
+            print(f"Error: {e}")
     
     def _get_gitlab_project_id(self):
         """Get the GitLab project ID - needed for API calls"""
@@ -404,22 +372,20 @@ class RepoSyncer:
 
 
 def main():
-    print("🚀 Starting sync...")
-    print(f"⏰ {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+    print("Starting sync...")
+    print(f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
     
-    # Check if we have tokens
     if not GITHUB_TOKEN or not GITLAB_TOKEN:
-        print("⚠️  Warning: Tokens not set. Some stuff won't work.")
+        print("Warning: Tokens not set. Some operations won't work.")
         print("Set GITHUB_TOKEN and GITLAB_TOKEN env vars\n")
     
     if not GITHUB_REPO or not GITLAB_REPO:
-        print("❌ Need GITHUB_REPO and GITLAB_REPO env vars")
+        print("Error: Need GITHUB_REPO and GITLAB_REPO env vars")
         print("Format: username/repository")
         sys.exit(1)
     
     syncer = RepoSyncer()
     
-    # Parse args
     sync_type = sys.argv[1] if len(sys.argv) > 1 else 'code'
     direction = sys.argv[2] if len(sys.argv) > 2 else 'both'
     
@@ -431,10 +397,10 @@ def main():
         syncer.sync_code(direction)
         syncer.sync_issues(direction)
     else:
-        print(f"Don't know what '{sync_type}' means")
+        print(f"Unknown sync type: '{sync_type}'")
         print("Usage: python sync_repos.py [code|issues|all] [both|github-to-gitlab|gitlab-to-github]")
     
-    print("\n✅ Done!")
+    print("\nDone!")
 
 
 if __name__ == '__main__':

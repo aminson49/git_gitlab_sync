@@ -13,68 +13,8 @@ jobs:
       - run:
           name: Sync to GitLab
           command: |
-            # Verify environment variables are set
-            if [ -z "$GITHUB_TOKEN" ]; then
-              echo "❌ Error: GITHUB_TOKEN is not set in CircleCI environment variables"
-              exit 1
-            fi
-            if [ -z "$GITLAB_TOKEN" ]; then
-              echo "❌ Error: GITLAB_TOKEN is not set in CircleCI environment variables"
-              exit 1
-            fi
-            if [ -z "$GITHUB_REPO" ]; then
-              echo "❌ Error: GITHUB_REPO is not set in CircleCI environment variables"
-              echo "Format should be: username/repo (without .git)"
-              exit 1
-            fi
-            if [ -z "$GITLAB_REPO" ]; then
-              echo "❌ Error: GITLAB_REPO is not set in CircleCI environment variables"
-              echo "Format should be: username/repo (without .git)"
-              exit 1
-            fi
-            
-            echo "✅ Environment variables verified"
-            echo "GITHUB_REPO: $GITHUB_REPO"
-            echo "GITLAB_REPO: $GITLAB_REPO"
-            
-            # Test GitLab token access and permissions
-            echo "Testing GitLab token access..."
-            TOKEN_TEST=$(curl -s --header "PRIVATE-TOKEN: $GITLAB_TOKEN" "https://gitlab.com/api/v4/user")
-            if [ $? -eq 0 ] && [ -n "$TOKEN_TEST" ]; then
-              echo "✅ GitLab token is valid and can authenticate"
-              
-              # Test if token has write access to the repository
-              echo "Testing repository access..."
-              REPO_PATH=$(echo "$GITLAB_REPO" | sed 's/\//%2F/g')
-              REPO_TEST=$(curl -s -o /dev/null -w "%{http_code}" --header "PRIVATE-TOKEN: $GITLAB_TOKEN" "https://gitlab.com/api/v4/projects/$REPO_PATH")
-              
-              if [ "$REPO_TEST" = "200" ]; then
-                echo "✅ Token has access to repository"
-                
-                # Check if token has write permissions by trying to get project info
-                PROJECT_INFO=$(curl -s --header "PRIVATE-TOKEN: $GITLAB_TOKEN" "https://gitlab.com/api/v4/projects/$REPO_PATH")
-                if echo "$PROJECT_INFO" | grep -q '"permissions"'; then
-                  echo "✅ Repository permissions check passed"
-                else
-                  echo "⚠️  Warning: Could not verify write permissions. Token might not have write_repository scope."
-                fi
-              elif [ "$REPO_TEST" = "404" ]; then
-                echo "❌ ERROR: Repository not found! Check GITLAB_REPO format: should be 'username/repo' or 'group/repo'"
-                echo "   Current value: $GITLAB_REPO"
-                exit 1
-              elif [ "$REPO_TEST" = "403" ]; then
-                echo "❌ ERROR: Token does not have access to this repository!"
-                echo "   Make sure:"
-                echo "   1. Token has 'api' AND 'write_repository' scopes"
-                echo "   2. Token owner is a member of the repository with Developer+ role"
-                echo "   3. Repository path is correct: $GITLAB_REPO"
-                exit 1
-              else
-                echo "⚠️  Warning: Repository access test returned HTTP $REPO_TEST"
-              fi
-            else
-              echo "❌ ERROR: GitLab token is invalid or cannot authenticate"
-              echo "   Check that GITLAB_TOKEN is set correctly in CircleCI environment variables"
+            if [ -z "$GITHUB_TOKEN" ] || [ -z "$GITLAB_TOKEN" ] || [ -z "$GITHUB_REPO" ] || [ -z "$GITLAB_REPO" ]; then
+              echo "Error: Missing required environment variables"
               exit 1
             fi
             
@@ -83,7 +23,6 @@ jobs:
             export GITHUB_REPO=$GITHUB_REPO
             export GITLAB_REPO=$GITLAB_REPO
             
-            # Optional: Set GitLab API base for self-hosted instances
             if [ -n "$GITLAB_API_BASE" ]; then
               export GITLAB_API_BASE=$GITLAB_API_BASE
             fi
