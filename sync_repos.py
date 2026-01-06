@@ -70,6 +70,11 @@ class RepoSyncer:
                 subprocess.run(['git', 'clone', github_url, '.github_repo'], check=True)
             
             os.chdir('.github_repo')
+            
+            # Set git user config for commits (needed for merges)
+            subprocess.run(['git', 'config', 'user.email', 'aminpriyam2499@gmail.com'], check=True)
+            subprocess.run(['git', 'config', 'user.name', 'Priyam Amin'], check=True)
+            
             subprocess.run(['git', 'fetch', 'origin'], check=True)
             
             # Add gitlab remote (ignore error if it exists)
@@ -249,6 +254,11 @@ class RepoSyncer:
                 subprocess.run(['git', 'clone', gitlab_url, '.gitlab_repo'], check=True)
             
             os.chdir('.gitlab_repo')
+            
+            # Set git user config for commits (needed for merges)
+            subprocess.run(['git', 'config', 'user.email', 'aminpriyam2499@gmail.com'], check=True)
+            subprocess.run(['git', 'config', 'user.name', 'Priyam Amin'], check=True)
+            
             subprocess.run(['git', 'fetch', 'origin'], check=True)
             subprocess.run(['git', 'remote', 'add', 'github', github_url], 
                          capture_output=True)
