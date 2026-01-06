@@ -140,7 +140,16 @@ class RepoSyncer:
                                           capture_output=True, text=True, check=False)
                     
                     if result.returncode == 0:
-                        print(f"  Synced branch: {branch}")
+                        # Verify push actually worked
+                        verify_push = subprocess.run(
+                            ['git', 'ls-remote', '--heads', 'gitlab', branch],
+                            capture_output=True, text=True, check=False
+                        )
+                        if verify_push.returncode == 0 and verify_push.stdout.strip():
+                            print(f"  Synced branch: {branch}")
+                        else:
+                            print(f"  Warning: Push reported success but branch not found on GitLab")
+                            print(f"     This might indicate a permission or repository access issue")
                     else:
                         error_msg = result.stderr or result.stdout
                         is_protected = 'protected branch' in error_msg or 'not allowed to force push' in error_msg
@@ -167,20 +176,56 @@ class RepoSyncer:
                                     )
                                 
                                 if merge_result.returncode == 0:
-                                    print(f"     Merge successful, pushing to GitLab...")
-                                    push_result = subprocess.run(
-                                        ['git', 'push', 'gitlab', branch],
+                                    # Check what we're about to push
+                                    local_head = subprocess.run(
+                                        ['git', 'rev-parse', 'HEAD'],
+                                        capture_output=True, text=True, check=True
+                                    ).stdout.strip()
+                                    
+                                    remote_head = subprocess.run(
+                                        ['git', 'ls-remote', '--heads', 'gitlab', branch],
                                         capture_output=True, text=True, check=False
                                     )
-                                    if push_result.returncode == 0:
-                                        print(f"  Synced branch: {branch} (merged and pushed)")
-                                    else:
-                                        push_error = push_result.stderr or push_result.stdout
-                                        if 'protected branch' in push_error:
-                                            print(f"  Error: Cannot sync branch {branch} - it's protected")
-                                            print(f"     Unprotect the branch in GitLab or give token permission")
+                                    
+                                    if remote_head.returncode == 0 and remote_head.stdout.strip():
+                                        remote_sha = remote_head.stdout.split()[0]
+                                        if local_head == remote_sha:
+                                            print(f"     Already up to date - no push needed")
+                                            print(f"  Synced branch: {branch} (already in sync)")
                                         else:
-                                            print(f"  Warning: Push failed after merge: {push_error[:200]}")
+                                            print(f"     Merge successful, pushing to GitLab...")
+                                            push_result = subprocess.run(
+                                                ['git', 'push', 'gitlab', branch],
+                                                capture_output=True, text=True, check=False
+                                            )
+                                            
+                                            if push_result.returncode == 0:
+                                                print(f"  Synced branch: {branch} (merged and pushed)")
+                                            else:
+                                                push_error = push_result.stderr or push_result.stdout
+                                                print(f"  Error: Push failed after merge")
+                                                print(f"     Error: {push_error[:500]}")
+                                    else:
+                                        print(f"     Merge successful, pushing new branch to GitLab...")
+                                        push_result = subprocess.run(
+                                            ['git', 'push', 'gitlab', branch],
+                                            capture_output=True, text=True, check=False
+                                        )
+                                        
+                                        if push_result.returncode == 0:
+                                            print(f"  Synced branch: {branch} (merged and pushed)")
+                                        else:
+                                            push_error = push_result.stderr or push_result.stdout
+                                            print(f"  Error: Push failed after merge")
+                                            print(f"     Error: {push_error[:500]}")
+                                            if 'protected branch' in push_error:
+                                                print(f"     Branch is protected - unprotect it or give token permission")
+                                            elif '403' in push_error or 'Forbidden' in push_error:
+                                                print(f"     Token permission issue - check token has write_repository scope")
+                                            elif '401' in push_error:
+                                                print(f"     Authentication failed - check token is valid")
+                                            else:
+                                                print(f"     Unknown error - check GitLab repository settings")
                                 else:
                                     print(f"  Warning: Could not merge GitLab changes: {merge_result.stderr[:200]}")
                             else:
