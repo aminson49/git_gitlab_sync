@@ -32,7 +32,7 @@ If you don't have your own server/machine, here are the easiest ways to automate
                export GITLAB_TOKEN=$GITLAB_TOKEN
                export GITHUB_REPO=$GITHUB_REPO
                export GITLAB_REPO=$GITLAB_REPO
-               python sync_repos.py github-to-gitlab
+               python sync_repos.py code github-to-gitlab
    workflows:
      version: 2
      sync-on-push:
@@ -86,7 +86,7 @@ If you don't have your own server/machine, here are the easiest ways to automate
        export GITLAB_TOKEN=$(GITLAB_TOKEN)
        export GITHUB_REPO=$(GITHUB_REPO)
        export GITLAB_REPO=$(GITLAB_REPO)
-       python sync_repos.py github-to-gitlab
+       python sync_repos.py code github-to-gitlab
      env:
        GITHUB_TOKEN: $(GITHUB_TOKEN)
        GITLAB_TOKEN: $(GITLAB_TOKEN)

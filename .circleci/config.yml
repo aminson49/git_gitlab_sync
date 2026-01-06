@@ -1,26 +1,26 @@
-   version: 2.1
-   jobs:
-     sync:
-       docker:
-         - image: python:3.9
-       steps:
-         - checkout
-         - run:
-             name: Install dependencies
-             command: pip install -r requirements.txt
-         - run:
-             name: Sync to GitLab
-             command: |
-               export GITHUB_TOKEN=$GITHUB_TOKEN
-               export GITLAB_TOKEN=$GITLAB_TOKEN
-               export GITHUB_REPO=$GITHUB_REPO
-               export GITLAB_REPO=$GITLAB_REPO
-               python sync_repos.py github-to-gitlab
-   workflows:
-     version: 2
-     sync-on-push:
-       jobs:
-         - sync:
-             filters:
-               branches:
-                 only: main
+version: 2.1
+jobs:
+  sync:
+    docker:
+      - image: python:3.9
+    steps:
+      - checkout
+      - run:
+          name: Install dependencies
+          command: pip install -r requirements.txt
+      - run:
+          name: Sync to GitLab
+          command: |
+            export GITHUB_TOKEN=$GITHUB_TOKEN
+            export GITLAB_TOKEN=$GITLAB_TOKEN
+            export GITHUB_REPO=$GITHUB_REPO
+            export GITLAB_REPO=$GITLAB_REPO
+            python sync_repos.py code github-to-gitlab
+workflows:
+  version: 2
+  sync-on-push:
+    jobs:
+      - sync:
+          filters:
+            branches:
+              only: main

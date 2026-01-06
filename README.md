@@ -58,7 +58,7 @@ pipeline {
                 script {
                     sh '''
                         pip install -r requirements.txt || pip3 install -r requirements.txt
-                        python sync_repos.py github-to-gitlab
+                        python sync_repos.py code github-to-gitlab
                     '''
                 }
             }
@@ -93,7 +93,7 @@ pipeline {
   export GITLAB_TOKEN="your_token"
   export GITHUB_REPO="username/repo"
   export GITLAB_REPO="username/repo"
-  python sync_repos.py github-to-gitlab
+  python sync_repos.py code github-to-gitlab
   ```
 
 ### Cloud Jenkins Setup (No Machine Needed)
@@ -150,7 +150,7 @@ Then access Jenkins at `http://your-cloud-url:8080` and follow setup wizard.
    set GITLAB_TOKEN=your_token
    set GITHUB_REPO=username/repo
    set GITLAB_REPO=username/repo
-   python sync_repos.py github-to-gitlab
+   python sync_repos.py code github-to-gitlab
    ```
 2. Open Task Scheduler
 3. Create Basic Task → Set trigger (e.g., every 15 minutes)
@@ -162,7 +162,7 @@ Then access Jenkins at `http://your-cloud-url:8080` and follow setup wizard.
 crontab -e
 
 # Add this line to run every 15 minutes
-*/15 * * * * cd /path/to/git_gitlab_sync && GITHUB_TOKEN=your_token GITLAB_TOKEN=your_token GITHUB_REPO=username/repo GITLAB_REPO=username/repo python3 sync_repos.py github-to-gitlab >> /var/log/gitlab-sync.log 2>&1
+*/15 * * * * cd /path/to/git_gitlab_sync && GITHUB_TOKEN=your_token GITLAB_TOKEN=your_token GITHUB_REPO=username/repo GITLAB_REPO=username/repo python3 sync_repos.py code github-to-gitlab >> /var/log/gitlab-sync.log 2>&1
 ```
 
 ### Local Python script
@@ -218,7 +218,7 @@ jobs:
             export GITLAB_TOKEN=$GITLAB_TOKEN
             export GITHUB_REPO=$GITHUB_REPO
             export GITLAB_REPO=$GITLAB_REPO
-            python sync_repos.py github-to-gitlab
+            python sync_repos.py code github-to-gitlab
 workflows:
   version: 2
   sync-on-push:
@@ -254,7 +254,7 @@ steps:
     export GITLAB_TOKEN=$(GITLAB_TOKEN)
     export GITHUB_REPO=$(GITHUB_REPO)
     export GITLAB_REPO=$(GITLAB_REPO)
-    python sync_repos.py github-to-gitlab
+    python sync_repos.py code github-to-gitlab
   env:
     GITHUB_TOKEN: $(GITHUB_TOKEN)
     GITLAB_TOKEN: $(GITLAB_TOKEN)
@@ -281,7 +281,7 @@ script:
   - export GITLAB_TOKEN=$GITLAB_TOKEN
   - export GITHUB_REPO=$GITHUB_REPO
   - export GITLAB_REPO=$GITLAB_REPO
-  - python sync_repos.py github-to-gitlab
+  - python sync_repos.py code github-to-gitlab
 ```
 Add environment variables in Travis CI settings.
 
