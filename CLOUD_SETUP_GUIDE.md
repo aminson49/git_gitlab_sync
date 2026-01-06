@@ -76,6 +76,35 @@ If you don't have your own server/machine, here are the easiest ways to automate
 - ✅ Make sure tokens have the correct scopes (`repo` for GitHub, `write_repository` for GitLab)
 - ✅ For GitLab, ensure token has `api` scope as well
 
+**Error: "403 Forbidden" when pushing to GitLab:**
+This is the most common GitLab error. Fix it by:
+
+1. **Check GitLab Token Scopes:**
+   - Go to GitLab → Preferences → Access Tokens
+   - Your token MUST have these scopes checked:
+     - ✅ `api` (full API access)
+     - ✅ `write_repository` (write repository content)
+   - If your token doesn't have both, create a new one with both scopes
+
+2. **Verify Token Has Repository Access:**
+   - Make sure the token was created by a user who has access to the repository
+   - For private repos, the token owner must be a member with at least `Developer` role
+   - Check repository settings → Members to verify access
+
+3. **Regenerate Token:**
+   - Sometimes tokens get corrupted or have issues
+   - Create a new GitLab token with `api` + `write_repository` scopes
+   - Update it in CircleCI environment variables
+
+4. **Check Repository Path:**
+   - Verify `GITLAB_REPO` is correct: `username/repo` or `group/repo`
+   - For nested groups: `group/subgroup/repo`
+   - Make sure there are no extra spaces or special characters
+
+5. **For Self-Hosted GitLab:**
+   - You may need to set `GITLAB_API_BASE` environment variable
+   - Format: `https://your-gitlab-instance.com/api/v4`
+
 **Cost:** Free for open source, $15/month for private repos (includes 6,000 build minutes)
 
 ---

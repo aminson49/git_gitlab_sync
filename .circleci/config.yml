@@ -7,7 +7,9 @@ jobs:
       - checkout
       - run:
           name: Install dependencies
-          command: pip install -r requirements.txt
+          command: |
+            apt-get update && apt-get install -y curl || true
+            pip install -r requirements.txt
       - run:
           name: Sync to GitLab
           command: |
@@ -35,10 +37,24 @@ jobs:
             echo "GITHUB_REPO: $GITHUB_REPO"
             echo "GITLAB_REPO: $GITLAB_REPO"
             
+            # Test GitLab token access (optional - helps debug 403 errors)
+            echo "Testing GitLab token access..."
+            if curl -s --header "PRIVATE-TOKEN: $GITLAB_TOKEN" "https://gitlab.com/api/v4/user" > /dev/null 2>&1; then
+              echo "✅ GitLab token is valid"
+            else
+              echo "⚠️  Warning: GitLab token validation failed (might still work, but check token permissions)"
+            fi
+            
             export GITHUB_TOKEN=$GITHUB_TOKEN
             export GITLAB_TOKEN=$GITLAB_TOKEN
             export GITHUB_REPO=$GITHUB_REPO
             export GITLAB_REPO=$GITLAB_REPO
+            
+            # Optional: Set GitLab API base for self-hosted instances
+            if [ -n "$GITLAB_API_BASE" ]; then
+              export GITLAB_API_BASE=$GITLAB_API_BASE
+            fi
+            
             python sync_repos.py code github-to-gitlab
 workflows:
   version: 2
