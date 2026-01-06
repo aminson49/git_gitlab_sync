@@ -135,17 +135,7 @@ class RepoSyncer:
                         capture_output=True, text=True
                     ).stdout.strip()
                     
-                    if gitlab_branch_exists:
-                        # GitLab has this branch - check if we need to merge
-                        print(f"  Checking branch {branch} for conflicts...")
-                        # Try to merge GitLab's version first (if it exists and differs)
-                        merge_result = subprocess.run(
-                            ['git', 'merge', f'gitlab/{branch}', '--no-edit', '--no-ff'],
-                            capture_output=True, text=True
-                        )
-                        # If merge fails, it's okay - we'll try force-with-lease
-                    
-                    # Try to push with better error handling
+                    # Try to push first (fast-forward case)
                     result = subprocess.run(['git', 'push', 'gitlab', branch], 
                                           capture_output=True, text=True, check=False)
                     
@@ -153,34 +143,66 @@ class RepoSyncer:
                         print(f"  ✅ Synced branch: {branch}")
                     else:
                         error_msg = result.stderr or result.stdout
-                        # Handle both "fetch first" and "non-fast-forward" errors
-                        if ('rejected' in error_msg and ('fetch first' in error_msg or 'non-fast-forward' in error_msg)) or 'deny updating' in error_msg:
-                            # GitLab has commits we don't have - try force-with-lease (safer than force)
-                            if 'deny updating' in error_msg:
-                                print(f"  ⚠️  Branch {branch} rejected (hidden ref - this shouldn't happen for regular branches)")
-                                print(f"     Skipping this branch...")
-                            else:
-                                print(f"  ⚠️  Branch {branch} rejected (GitLab has different commits)")
-                                print(f"     Attempting safe force push (--force-with-lease)...")
-                                force_result = subprocess.run(
-                                    ['git', 'push', '--force-with-lease', 'gitlab', branch],
+                        
+                        # Check if branch is protected or has diverged
+                        is_protected = 'protected branch' in error_msg or 'not allowed to force push' in error_msg
+                        is_diverged = 'rejected' in error_msg and ('fetch first' in error_msg or 'non-fast-forward' in error_msg)
+                        
+                        if is_protected or is_diverged:
+                            # For protected branches or diverged branches, merge first then push
+                            print(f"  ⚠️  Branch {branch} needs merge (protected or diverged)")
+                            
+                            if gitlab_branch_exists:
+                                print(f"     Merging GitLab's changes into local branch...")
+                                # Fetch latest from GitLab
+                                subprocess.run(['git', 'fetch', 'gitlab', branch], capture_output=True)
+                                
+                                # Try to merge GitLab's version, preferring GitHub's version on conflicts
+                                merge_result = subprocess.run(
+                                    ['git', 'merge', f'gitlab/{branch}', '--no-edit', '--no-ff', '-X', 'ours', '--strategy-option=theirs'],
                                     capture_output=True, text=True, check=False
                                 )
-                                if force_result.returncode == 0:
-                                    print(f"  ✅ Synced branch: {branch} (force pushed)")
-                                else:
-                                    # If force-with-lease fails, try regular force (last resort)
-                                    print(f"     Force-with-lease failed, trying regular force push...")
-                                    force_result2 = subprocess.run(
-                                        ['git', 'push', '--force', 'gitlab', branch],
+                                
+                                # If merge fails due to conflicts, try with ours strategy (GitHub wins)
+                                if merge_result.returncode != 0:
+                                    print(f"     Merge had conflicts, using GitHub version...")
+                                    # Abort the failed merge
+                                    subprocess.run(['git', 'merge', '--abort'], capture_output=True)
+                                    # Try merge with ours strategy (GitHub version wins)
+                                    merge_result = subprocess.run(
+                                        ['git', 'merge', f'gitlab/{branch}', '--no-edit', '--no-ff', '-X', 'ours'],
                                         capture_output=True, text=True, check=False
                                     )
-                                    if force_result2.returncode == 0:
-                                        print(f"  ✅ Synced branch: {branch} (force pushed - use with caution)")
+                                
+                                if merge_result.returncode == 0:
+                                    print(f"     Merge successful, pushing to GitLab...")
+                                    # Now try to push the merged result
+                                    push_result = subprocess.run(
+                                        ['git', 'push', 'gitlab', branch],
+                                        capture_output=True, text=True, check=False
+                                    )
+                                    if push_result.returncode == 0:
+                                        print(f"  ✅ Synced branch: {branch} (merged and pushed)")
                                     else:
-                                        print(f"  ⚠️  Could not sync branch {branch} - GitLab has commits that conflict")
-                                        print(f"     Error: {force_result2.stderr[:200] if force_result2.stderr else force_result2.stdout[:200]}")
-                                        print(f"     You may need to manually merge or resolve conflicts in GitLab")
+                                        push_error = push_result.stderr or push_result.stdout
+                                        if 'protected branch' in push_error:
+                                            print(f"  ❌ Cannot sync branch {branch} - it's protected and merge push failed")
+                                            print(f"     Options:")
+                                            print(f"     1. Unprotect the branch in GitLab (Settings → Repository → Protected Branches)")
+                                            print(f"     2. Give your token permission to push to protected branches")
+                                            print(f"     3. Manually merge GitHub changes into GitLab")
+                                        else:
+                                            print(f"  ⚠️  Push failed after merge: {push_error[:200]}")
+                                else:
+                                    print(f"  ⚠️  Could not merge GitLab changes: {merge_result.stderr[:200]}")
+                                    print(f"     You may need to manually resolve conflicts")
+                            else:
+                                # Branch doesn't exist on GitLab, but push failed - might be protected branch creation
+                                if is_protected:
+                                    print(f"  ❌ Cannot create protected branch {branch}")
+                                    print(f"     Unprotect it first or use a different branch name")
+                                else:
+                                    print(f"  ⚠️  Push failed for unknown reason: {error_msg[:200]}")
                         elif 'deny updating a hidden ref' in error_msg:
                             print(f"  ⚠️  Skipping branch {branch} - appears to be a hidden ref")
                         elif '403' in error_msg or 'Forbidden' in error_msg:
