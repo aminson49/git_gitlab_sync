@@ -154,7 +154,7 @@ class RepoSyncer:
                                 subprocess.run(['git', 'fetch', 'gitlab', branch], capture_output=True)
                                 
                                 merge_result = subprocess.run(
-                                    ['git', 'merge', f'gitlab/{branch}', '--no-edit', '--no-ff', '-X', 'ours', '--strategy-option=theirs'],
+                                    ['git', 'merge', f'gitlab/{branch}', '--no-edit', '--no-ff', '--allow-unrelated-histories', '-X', 'ours'],
                                     capture_output=True, text=True, check=False
                                 )
                                 
@@ -162,7 +162,7 @@ class RepoSyncer:
                                     print(f"     Merge had conflicts, using GitHub version...")
                                     subprocess.run(['git', 'merge', '--abort'], capture_output=True)
                                     merge_result = subprocess.run(
-                                        ['git', 'merge', f'gitlab/{branch}', '--no-edit', '--no-ff', '-X', 'ours'],
+                                        ['git', 'merge', f'gitlab/{branch}', '--no-edit', '--no-ff', '--allow-unrelated-histories', '-X', 'ours'],
                                         capture_output=True, text=True, check=False
                                     )
                                 
