@@ -161,105 +161,147 @@ class RepoSyncer:
                             print(f"  Branch {branch} needs merge (protected or diverged)")
                             
                             if gitlab_branch_exists:
-                                print(f"     Merging GitLab's changes into local branch...")
+                                print(f"     Fetching from GitLab...")
                                 subprocess.run(['git', 'fetch', 'gitlab', branch], capture_output=True)
                                 
+                                # First, ensure we're exactly at GitHub version
+                                print(f"     Resetting to GitHub version...")
+                                subprocess.run(['git', 'reset', '--hard', f'origin/{branch}'], capture_output=True)
+                                
+                                # Get list of files from GitHub
+                                github_files_result = subprocess.run(
+                                    ['git', 'ls-tree', '-r', '--name-only', 'HEAD'],
+                                    capture_output=True, text=True, check=True
+                                )
+                                github_files = set()
+                                for line in github_files_result.stdout.strip().split('\n'):
+                                    if line.strip():
+                                        github_files.add(line.strip())
+                                
+                                # Create a new commit that matches GitHub exactly
+                                # This ensures we have a clean state
+                                print(f"     Creating sync commit matching GitHub exactly...")
+                                
+                                # Remove all files first
+                                subprocess.run(['git', 'rm', '-rf', '--ignore-unmatch', '.'], capture_output=True, cwd='.')
+                                
+                                # Checkout all files from GitHub
+                                subprocess.run(['git', 'checkout', 'HEAD', '--', '.'], capture_output=True)
+                                
+                                # Add all files
+                                subprocess.run(['git', 'add', '-A'], capture_output=True)
+                                
+                                # Check if there are changes
+                                status_check = subprocess.run(
+                                    ['git', 'status', '--porcelain'],
+                                    capture_output=True, text=True, check=True
+                                )
+                                
+                                if status_check.stdout.strip() or True:  # Always create commit to ensure sync
+                                    commit_result = subprocess.run(
+                                        ['git', 'commit', '-m', f'Sync from GitHub - exact match [skip sync]'],
+                                        capture_output=True, text=True, check=False
+                                    )
+                                
+                                # Now merge GitLab's branch to preserve history (but we'll keep our version)
+                                print(f"     Merging GitLab history (keeping GitHub files)...")
                                 merge_result = subprocess.run(
                                     ['git', 'merge', f'gitlab/{branch}', '--no-edit', '--no-ff', '--allow-unrelated-histories', '-X', 'ours'],
                                     capture_output=True, text=True, check=False
                                 )
                                 
                                 if merge_result.returncode != 0:
-                                    print(f"     Merge had conflicts, using GitHub version...")
-                                    subprocess.run(['git', 'merge', '--abort'], capture_output=True)
+                                    # If merge fails, abort and try again
+                                    subprocess.run(['git', 'merge', '--abort'], capture_output=True, check=False)
+                                    # Reset again to GitHub
+                                    subprocess.run(['git', 'reset', '--hard', f'origin/{branch}'], capture_output=True)
+                                    # Create commit
+                                    subprocess.run(['git', 'add', '-A'], capture_output=True)
+                                    subprocess.run(
+                                        ['git', 'commit', '-m', f'Sync from GitHub - exact match [skip sync]'],
+                                        capture_output=True, text=True, check=False
+                                    )
+                                    # Try merge again
                                     merge_result = subprocess.run(
                                         ['git', 'merge', f'gitlab/{branch}', '--no-edit', '--no-ff', '--allow-unrelated-histories', '-X', 'ours'],
                                         capture_output=True, text=True, check=False
                                     )
                                 
-                                if merge_result.returncode == 0:
-                                    # After merge, ensure we match GitHub exactly
-                                    # Get list of files from GitHub
-                                    github_files = set()
-                                    ls_tree = subprocess.run(
-                                        ['git', 'ls-tree', '-r', '--name-only', f'origin/{branch}'],
-                                        capture_output=True, text=True, check=True
-                                    )
-                                    for line in ls_tree.stdout.strip().split('\n'):
-                                        if line.strip():
-                                            github_files.add(line.strip())
-                                    
-                                    # Get list of files currently in working directory
-                                    current_files = set()
-                                    ls_files = subprocess.run(
-                                        ['git', 'ls-files'],
-                                        capture_output=True, text=True, check=True
-                                    )
-                                    for line in ls_files.stdout.strip().split('\n'):
-                                        if line.strip():
-                                            current_files.add(line.strip())
-                                    
-                                    # Remove files that exist locally but not in GitHub
-                                    files_to_remove = current_files - github_files
-                                    if files_to_remove:
-                                        print(f"     Removing {len(files_to_remove)} file(s) that don't exist in GitHub...")
-                                        for file in files_to_remove:
-                                            subprocess.run(['git', 'rm', '--cached', file], capture_output=True)
-                                    
-                                    # Reset to GitHub version to ensure exact match
-                                    print(f"     Ensuring files match GitHub exactly...")
-                                    reset_after_merge = subprocess.run(
-                                        ['git', 'checkout', '--force', f'origin/{branch}', '--', '.'],
+                                # After merge, ensure we still match GitHub exactly
+                                print(f"     Ensuring final state matches GitHub exactly...")
+                                subprocess.run(['git', 'reset', '--hard', f'origin/{branch}'], capture_output=True)
+                                
+                                # Remove files not in GitHub
+                                current_files_result = subprocess.run(
+                                    ['git', 'ls-files'],
+                                    capture_output=True, text=True, check=True
+                                )
+                                current_files = set()
+                                for line in current_files_result.stdout.strip().split('\n'):
+                                    if line.strip():
+                                        current_files.add(line.strip())
+                                
+                                files_to_remove = current_files - github_files
+                                if files_to_remove:
+                                    print(f"     Removing {len(files_to_remove)} file(s) not in GitHub...")
+                                    for file in files_to_remove:
+                                        subprocess.run(['git', 'rm', '--cached', '--ignore-unmatch', file], capture_output=True)
+                                
+                                # Checkout all GitHub files
+                                subprocess.run(['git', 'checkout', f'origin/{branch}', '--', '.'], capture_output=True)
+                                subprocess.run(['git', 'add', '-A'], capture_output=True)
+                                
+                                # Create final commit
+                                final_status = subprocess.run(
+                                    ['git', 'status', '--porcelain'],
+                                    capture_output=True, text=True, check=True
+                                )
+                                if final_status.stdout.strip():
+                                    subprocess.run(
+                                        ['git', 'commit', '-m', f'Sync from GitHub - ensure exact match [skip sync]'],
                                         capture_output=True, text=True, check=False
                                     )
-                                    
-                                    # Add all files from GitHub
-                                    subprocess.run(['git', 'add', '-A'], capture_output=True)
-                                    
-                                    # Create a commit if there are changes
-                                    status_check = subprocess.run(
-                                        ['git', 'status', '--porcelain'],
-                                        capture_output=True, text=True, check=True
-                                    )
-                                    if status_check.stdout.strip():
-                                        subprocess.run(
-                                            ['git', 'commit', '-m', f'Sync from GitHub - ensure exact match [skip sync]'],
-                                            capture_output=True, text=True, check=False
-                                        )
-                                    
-                                    print(f"     Pushing to GitLab...")
-                                    push_result = subprocess.run(
-                                        ['git', 'push', 'gitlab', branch],
-                                        capture_output=True, text=True, check=False
-                                    )
-                                    
-                                    if push_result.returncode == 0:
-                                        print(f"  Synced branch: {branch} (merged and pushed)")
-                                    else:
-                                        push_error = push_result.stderr or push_result.stdout
-                                        print(f"  Error: Push failed after merge")
-                                        print(f"     Error: {push_error[:500]}")
-                                        if 'protected branch' in push_error:
-                                            print(f"     Branch is protected - unprotect it or give token permission")
-                                        elif '403' in push_error or 'Forbidden' in push_error:
-                                            print(f"     Token permission issue - check token has write_repository scope")
-                                        elif '401' in push_error:
-                                            print(f"     Authentication failed - check token is valid")
+                                
+                                print(f"     Pushing to GitLab...")
+                                push_result = subprocess.run(
+                                    ['git', 'push', 'gitlab', branch],
+                                    capture_output=True, text=True, check=False
+                                )
+                                
+                                if push_result.returncode == 0:
+                                    print(f"  Synced branch: {branch} (merged and pushed)")
                                 else:
-                                    print(f"  Warning: Could not merge GitLab changes: {merge_result.stderr[:200]}")
+                                    push_error = push_result.stderr or push_result.stdout
+                                    print(f"  Error: Push failed after merge")
+                                    print(f"     Error: {push_error[:500]}")
+                                    if 'protected branch' in push_error:
+                                        print(f"     Branch is protected - unprotect it or give token permission")
+                                    elif '403' in push_error or 'Forbidden' in push_error:
+                                        print(f"     Token permission issue - check token has write_repository scope")
+                                    elif '401' in push_error:
+                                        print(f"     Authentication failed - check token is valid")
                             else:
-                                if is_protected:
-                                    print(f"  Error: Cannot create protected branch {branch}")
+                                # Branch doesn't exist on GitLab, just push
+                                print(f"     Branch doesn't exist on GitLab, pushing...")
+                                push_result = subprocess.run(
+                                    ['git', 'push', 'gitlab', branch],
+                                    capture_output=True, text=True, check=False
+                                )
+                                if push_result.returncode == 0:
+                                    print(f"  Synced branch: {branch}")
                                 else:
-                                    print(f"  Warning: Push failed: {error_msg[:200]}")
-                        elif 'deny updating a hidden ref' in error_msg:
-                            print(f"  Skipping branch {branch} - hidden ref")
-                        elif '403' in error_msg or 'Forbidden' in error_msg:
-                            print(f"  Error: 403 Forbidden - check token permissions")
-                        elif '401' in error_msg or 'Unauthorized' in error_msg:
-                            print(f"  Error: Authentication failed - check token")
+                                    push_error = push_result.stderr or push_result.stdout
+                                    print(f"  Error: Push failed: {push_error[:500]}")
                         else:
-                            print(f"  Warning: Failed to sync branch {branch}: {error_msg[:200]}")
+                            # Not protected or diverged, but push failed for another reason
+                            if 'deny updating a hidden ref' in error_msg:
+                                print(f"  Skipping branch {branch} - hidden ref")
+                            elif '403' in error_msg or 'Forbidden' in error_msg:
+                                print(f"  Error: 403 Forbidden - check token permissions")
+                            elif '401' in error_msg or 'Unauthorized' in error_msg:
+                                print(f"  Error: Authentication failed - check token")
+                            else:
+                                print(f"  Warning: Failed to sync branch {branch}: {error_msg[:200]}")
                 except subprocess.CalledProcessError as e:
                     print(f"  Warning: Failed to sync branch {branch}: {e}")
             
