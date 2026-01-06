@@ -199,7 +199,13 @@ If you just want GitHub → GitLab one-way, GitLab has a built-in mirror:
 These cloud CI/CD services are easier to set up than Jenkins and don't require your own machine:
 
 **CircleCI (Recommended - Free for Open Source):**
-Create `.circleci/config.yml`:
+
+1. Sign up at [circleci.com](https://circleci.com) and add your GitHub repo
+2. **Add environment variables** (IMPORTANT):
+   - Project Settings → Environment Variables
+   - Add: `GITHUB_TOKEN`, `GITLAB_TOKEN`, `GITHUB_REPO`, `GITLAB_REPO`
+   - **Format for repos:** `username/repo` (e.g., `octocat/Hello-World`) - **NO .git extension!**
+3. Create `.circleci/config.yml`:
 ```yaml
 version: 2.1
 jobs:
@@ -323,10 +329,24 @@ The `sync_activities.py` script can sync issues, milestones, labels, etc. It's a
 
 ## Problems?
 
-- **Auth errors**: Check your tokens have the right permissions
+### CircleCI Issues
+
+**"repository not found" or "remote: Not Found":**
+- ✅ Check `GITHUB_REPO` format: Should be `username/repo` (NOT `https://github.com/username/repo.git`)
+- ✅ Verify `GITHUB_TOKEN` has `repo` scope and access to the repository
+- ✅ Make sure all 4 environment variables are set in CircleCI project settings
+
+**"GITHUB_REPO is not set":**
+- ✅ Go to CircleCI → Project Settings → Environment Variables
+- ✅ Verify all variables are set: `GITHUB_TOKEN`, `GITLAB_TOKEN`, `GITHUB_REPO`, `GITLAB_REPO`
+- ✅ Check for typos (variable names are case-sensitive)
+
+### General Issues
+
+- **Auth errors**: Check your tokens have the right permissions (`repo` for GitHub, `write_repository` for GitLab)
 - **Loops**: Make sure workflows aren't triggering each other
 - **Can't push**: Tokens need write access to the repos
 - **Self-hosted**: Use your instance URLs instead of github.com/gitlab.com
 
-Check the workflow logs in GitHub/GitLab - usually it's a token permission issue or wrong URL.
+Check the workflow logs - usually it's a token permission issue or wrong URL format.
 
