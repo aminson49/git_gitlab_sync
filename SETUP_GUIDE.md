@@ -99,7 +99,7 @@ If you prefer a simpler setup without a Jenkinsfile:
    export GITLAB_TOKEN="your_gitlab_token"
    export GITHUB_REPO="username/repo"
    export GITLAB_REPO="username/repo"
-   python sync_repos.py github-to-gitlab || python3 sync_repos.py github-to-gitlab
+   python sync_repos.py code github-to-gitlab || python3 sync_repos.py code github-to-gitlab
    ```
 5. Save and test
 
@@ -228,7 +228,7 @@ For simple automation without a CI/CD server, use cron (Linux/Mac) or Task Sched
    set GITLAB_TOKEN=your_gitlab_token
    set GITHUB_REPO=username/repo
    set GITLAB_REPO=username/repo
-   python sync_repos.py github-to-gitlab
+   python sync_repos.py code github-to-gitlab
    ```
 
 2. **Open Task Scheduler:**
@@ -257,7 +257,7 @@ For simple automation without a CI/CD server, use cron (Linux/Mac) or Task Sched
 
 2. **Add this line** (runs every 15 minutes):
    ```bash
-   */15 * * * * cd /path/to/git_gitlab_sync && GITHUB_TOKEN=your_token GITLAB_TOKEN=your_token GITHUB_REPO=username/repo GITLAB_REPO=username/repo python3 sync_repos.py github-to-gitlab >> /var/log/gitlab-sync.log 2>&1
+   */15 * * * * cd /path/to/git_gitlab_sync && GITHUB_TOKEN=your_token GITLAB_TOKEN=your_token GITHUB_REPO=username/repo GITLAB_REPO=username/repo python3 sync_repos.py code github-to-gitlab >> /var/log/gitlab-sync.log 2>&1
    ```
 
 3. **For better security**, store tokens in a file:
@@ -269,7 +269,7 @@ For simple automation without a CI/CD server, use cron (Linux/Mac) or Task Sched
    GITLAB_REPO=username/repo
    
    # Update crontab to source it
-   */15 * * * * cd /path/to/git_gitlab_sync && source .env && python3 sync_repos.py github-to-gitlab >> /var/log/gitlab-sync.log 2>&1
+   */15 * * * * cd /path/to/git_gitlab_sync && source .env && python3 sync_repos.py code github-to-gitlab >> /var/log/gitlab-sync.log 2>&1
    ```
 
 4. **Test it:**
@@ -277,7 +277,7 @@ For simple automation without a CI/CD server, use cron (Linux/Mac) or Task Sched
    # Run manually first
    cd /path/to/git_gitlab_sync
    source .env
-   python3 sync_repos.py github-to-gitlab
+   python3 sync_repos.py code github-to-gitlab
    ```
 
 ## GitLab CI/CD (pushes GitLab → GitHub)
@@ -336,7 +336,7 @@ Right now the GitLab → GitHub sync is manual (you have to click play). To make
 - Verify webhook is configured correctly if using webhook triggers
 
 **Cron/Task Scheduler not working:**
-- Test the script manually first: `python sync_repos.py github-to-gitlab`
+- Test the script manually first: `python sync_repos.py code github-to-gitlab`
 - Check that environment variables are set correctly
 - For Windows: Check Task Scheduler history for errors
 - For Linux: Check cron logs: `grep CRON /var/log/syslog` or check your log file

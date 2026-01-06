@@ -60,7 +60,7 @@ pipeline {
                 script {
                     sh '''
                         echo "🔄 Syncing from GitHub to GitLab..."
-                        python sync_repos.py github-to-gitlab || python3 sync_repos.py github-to-gitlab
+                        python sync_repos.py code github-to-gitlab || python3 sync_repos.py code github-to-gitlab
                     '''
                 }
             }
