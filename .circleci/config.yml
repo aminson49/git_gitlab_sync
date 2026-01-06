@@ -37,12 +37,45 @@ jobs:
             echo "GITHUB_REPO: $GITHUB_REPO"
             echo "GITLAB_REPO: $GITLAB_REPO"
             
-            # Test GitLab token access (optional - helps debug 403 errors)
+            # Test GitLab token access and permissions
             echo "Testing GitLab token access..."
-            if curl -s --header "PRIVATE-TOKEN: $GITLAB_TOKEN" "https://gitlab.com/api/v4/user" > /dev/null 2>&1; then
-              echo "✅ GitLab token is valid"
+            TOKEN_TEST=$(curl -s --header "PRIVATE-TOKEN: $GITLAB_TOKEN" "https://gitlab.com/api/v4/user")
+            if [ $? -eq 0 ] && [ -n "$TOKEN_TEST" ]; then
+              echo "✅ GitLab token is valid and can authenticate"
+              
+              # Test if token has write access to the repository
+              echo "Testing repository access..."
+              REPO_PATH=$(echo "$GITLAB_REPO" | sed 's/\//%2F/g')
+              REPO_TEST=$(curl -s -o /dev/null -w "%{http_code}" --header "PRIVATE-TOKEN: $GITLAB_TOKEN" "https://gitlab.com/api/v4/projects/$REPO_PATH")
+              
+              if [ "$REPO_TEST" = "200" ]; then
+                echo "✅ Token has access to repository"
+                
+                # Check if token has write permissions by trying to get project info
+                PROJECT_INFO=$(curl -s --header "PRIVATE-TOKEN: $GITLAB_TOKEN" "https://gitlab.com/api/v4/projects/$REPO_PATH")
+                if echo "$PROJECT_INFO" | grep -q '"permissions"'; then
+                  echo "✅ Repository permissions check passed"
+                else
+                  echo "⚠️  Warning: Could not verify write permissions. Token might not have write_repository scope."
+                fi
+              elif [ "$REPO_TEST" = "404" ]; then
+                echo "❌ ERROR: Repository not found! Check GITLAB_REPO format: should be 'username/repo' or 'group/repo'"
+                echo "   Current value: $GITLAB_REPO"
+                exit 1
+              elif [ "$REPO_TEST" = "403" ]; then
+                echo "❌ ERROR: Token does not have access to this repository!"
+                echo "   Make sure:"
+                echo "   1. Token has 'api' AND 'write_repository' scopes"
+                echo "   2. Token owner is a member of the repository with Developer+ role"
+                echo "   3. Repository path is correct: $GITLAB_REPO"
+                exit 1
+              else
+                echo "⚠️  Warning: Repository access test returned HTTP $REPO_TEST"
+              fi
             else
-              echo "⚠️  Warning: GitLab token validation failed (might still work, but check token permissions)"
+              echo "❌ ERROR: GitLab token is invalid or cannot authenticate"
+              echo "   Check that GITLAB_TOKEN is set correctly in CircleCI environment variables"
+              exit 1
             fi
             
             export GITHUB_TOKEN=$GITHUB_TOKEN

@@ -88,8 +88,24 @@ class RepoSyncer:
             for branch in branches:
                 try:
                     subprocess.run(['git', 'checkout', branch], check=True, capture_output=True)
-                    subprocess.run(['git', 'push', 'gitlab', branch], check=True)
-                    print(f"  ✅ Synced branch: {branch}")
+                    
+                    # Try to push with better error handling
+                    result = subprocess.run(['git', 'push', 'gitlab', branch], 
+                                          capture_output=True, text=True, check=False)
+                    if result.returncode == 0:
+                        print(f"  ✅ Synced branch: {branch}")
+                    else:
+                        error_msg = result.stderr or result.stdout
+                        if '403' in error_msg or 'Forbidden' in error_msg:
+                            print(f"  ❌ Failed to sync branch {branch}: 403 Forbidden")
+                            print(f"     This means your GitLab token doesn't have write permissions.")
+                            print(f"     Fix: Create a new token with BOTH 'api' AND 'write_repository' scopes")
+                            print(f"     Then update GITLAB_TOKEN in CircleCI environment variables")
+                        elif '401' in error_msg or 'Unauthorized' in error_msg:
+                            print(f"  ❌ Failed to sync branch {branch}: Authentication failed")
+                            print(f"     Check that GITLAB_TOKEN is correct and not expired")
+                        else:
+                            print(f"  ⚠️  Failed to sync branch {branch}: {error_msg[:200]}")
                 except subprocess.CalledProcessError as e:
                     print(f"  ⚠️  Failed to sync branch {branch}: {e}")
             
