@@ -230,7 +230,7 @@ class RepoSyncer:
                                 # After merge, ensure files match GitHub exactly (but keep the merge commit)
                                 print(f"     Ensuring files match GitHub exactly...")
                                 
-                                # Remove files not in GitHub
+                                # Get all currently tracked files
                                 current_files_result = subprocess.run(
                                     ['git', 'ls-files'],
                                     capture_output=True, text=True, check=True
@@ -240,14 +240,39 @@ class RepoSyncer:
                                     if line.strip():
                                         current_files.add(line.strip())
                                 
-                                files_to_remove = current_files - github_files
-                                if files_to_remove:
-                                    print(f"     Removing {len(files_to_remove)} file(s) not in GitHub...")
-                                    for file in files_to_remove:
+                                # Remove all files from index first
+                                if current_files:
+                                    print(f"     Removing all files from index...")
+                                    for file in current_files:
                                         subprocess.run(['git', 'rm', '--cached', '--ignore-unmatch', file], capture_output=True)
                                 
-                                # Checkout all GitHub files (this updates files but keeps the merge commit)
+                                # Remove untracked files
+                                subprocess.run(['git', 'clean', '-fd'], capture_output=True)
+                                
+                                # Now checkout all files from GitHub (this adds them back)
+                                print(f"     Checking out all files from GitHub...")
                                 subprocess.run(['git', 'checkout', f'origin/{branch}', '--', '.'], capture_output=True)
+                                
+                                # Remove any files that still exist but aren't in GitHub
+                                current_after = subprocess.run(
+                                    ['git', 'ls-files'],
+                                    capture_output=True, text=True, check=True
+                                )
+                                files_after = set()
+                                for line in current_after.stdout.strip().split('\n'):
+                                    if line.strip():
+                                        files_after.add(line.strip())
+                                
+                                extra_files = files_after - github_files
+                                if extra_files:
+                                    print(f"     Removing {len(extra_files)} extra file(s) not in GitHub...")
+                                    for file in extra_files:
+                                        subprocess.run(['git', 'rm', '--cached', '--ignore-unmatch', file], capture_output=True)
+                                        # Also remove from filesystem if it exists
+                                        if os.path.exists(file):
+                                            os.remove(file)
+                                
+                                # Add all files (this stages everything)
                                 subprocess.run(['git', 'add', '-A'], capture_output=True)
                                 
                                 # Create final commit if there are changes
@@ -281,8 +306,44 @@ class RepoSyncer:
                                             capture_output=True, text=True, check=False
                                         )
                                         if merge_again.returncode == 0:
-                                            # Ensure files still match GitHub
+                                            # Ensure files still match GitHub exactly
+                                            current_merge_files = subprocess.run(
+                                                ['git', 'ls-files'],
+                                                capture_output=True, text=True, check=True
+                                            )
+                                            merge_files_set = set()
+                                            for line in current_merge_files.stdout.strip().split('\n'):
+                                                if line.strip():
+                                                    merge_files_set.add(line.strip())
+                                            
+                                            # Remove all files from index
+                                            if merge_files_set:
+                                                for file in merge_files_set:
+                                                    subprocess.run(['git', 'rm', '--cached', '--ignore-unmatch', file], capture_output=True)
+                                            
+                                            # Remove untracked files
+                                            subprocess.run(['git', 'clean', '-fd'], capture_output=True)
+                                            
+                                            # Checkout all files from GitHub
                                             subprocess.run(['git', 'checkout', f'origin/{branch}', '--', '.'], capture_output=True)
+                                            
+                                            # Remove any extra files
+                                            after_merge_check = subprocess.run(
+                                                ['git', 'ls-files'],
+                                                capture_output=True, text=True, check=True
+                                            )
+                                            after_merge_set = set()
+                                            for line in after_merge_check.stdout.strip().split('\n'):
+                                                if line.strip():
+                                                    after_merge_set.add(line.strip())
+                                            
+                                            extra_after_merge = after_merge_set - github_files
+                                            if extra_after_merge:
+                                                for file in extra_after_merge:
+                                                    subprocess.run(['git', 'rm', '--cached', '--ignore-unmatch', file], capture_output=True)
+                                                    if os.path.exists(file):
+                                                        os.remove(file)
+                                            
                                             subprocess.run(['git', 'add', '-A'], capture_output=True)
                                             status_after = subprocess.run(
                                                 ['git', 'status', '--porcelain'],
