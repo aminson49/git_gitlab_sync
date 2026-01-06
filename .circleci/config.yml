@@ -11,6 +11,30 @@ jobs:
       - run:
           name: Sync to GitLab
           command: |
+            # Verify environment variables are set
+            if [ -z "$GITHUB_TOKEN" ]; then
+              echo "❌ Error: GITHUB_TOKEN is not set in CircleCI environment variables"
+              exit 1
+            fi
+            if [ -z "$GITLAB_TOKEN" ]; then
+              echo "❌ Error: GITLAB_TOKEN is not set in CircleCI environment variables"
+              exit 1
+            fi
+            if [ -z "$GITHUB_REPO" ]; then
+              echo "❌ Error: GITHUB_REPO is not set in CircleCI environment variables"
+              echo "Format should be: username/repo (without .git)"
+              exit 1
+            fi
+            if [ -z "$GITLAB_REPO" ]; then
+              echo "❌ Error: GITLAB_REPO is not set in CircleCI environment variables"
+              echo "Format should be: username/repo (without .git)"
+              exit 1
+            fi
+            
+            echo "✅ Environment variables verified"
+            echo "GITHUB_REPO: $GITHUB_REPO"
+            echo "GITLAB_REPO: $GITLAB_REPO"
+            
             export GITHUB_TOKEN=$GITHUB_TOKEN
             export GITLAB_TOKEN=$GITLAB_TOKEN
             export GITHUB_REPO=$GITHUB_REPO

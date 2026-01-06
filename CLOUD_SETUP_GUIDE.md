@@ -44,8 +44,37 @@ If you don't have your own server/machine, here are the easiest ways to automate
    ```
 4. **Add environment variables:**
    - In CircleCI: Project Settings → Environment Variables
-   - Add: `GITHUB_TOKEN`, `GITLAB_TOKEN`, `GITHUB_REPO`, `GITLAB_REPO`
+   - Click "Add Environment Variable"
+   - Add these 4 variables:
+     - **`GITHUB_TOKEN`**: Your GitHub personal access token (with `repo` scope)
+     - **`GITLAB_TOKEN`**: Your GitLab access token (with `write_repository` scope)
+     - **`GITHUB_REPO`**: Format: `username/repo` (e.g., `octocat/Hello-World`, **NO .git extension**)
+     - **`GITLAB_REPO`**: Format: `username/repo` or `group/repo` (e.g., `myuser/myproject`, **NO .git extension**)
+   
+   ⚠️ **Important:** 
+   - Do NOT include `.git` in the repo names
+   - Do NOT include `https://github.com/` or `https://gitlab.com/` - just `username/repo`
+   - Make sure your GitHub token has access to the repository (check token permissions)
+
 5. **Push to GitHub** - CircleCI will automatically run!
+
+### Troubleshooting CircleCI
+
+**Error: "repository not found" or "remote: Not Found":**
+- ✅ Check that `GITHUB_REPO` is in the correct format: `username/repo` (not `https://github.com/username/repo.git`)
+- ✅ Verify your `GITHUB_TOKEN` has the `repo` scope and access to the repository
+- ✅ Make sure the repository exists and is accessible with your token
+- ✅ For private repos, ensure the token has access to private repositories
+
+**Error: "GITHUB_REPO is not set":**
+- ✅ Go to CircleCI → Project Settings → Environment Variables
+- ✅ Make sure all 4 variables are set: `GITHUB_TOKEN`, `GITLAB_TOKEN`, `GITHUB_REPO`, `GITLAB_REPO`
+- ✅ Check for typos in variable names (case-sensitive)
+
+**Error: "Authentication failed" or "Permission denied":**
+- ✅ Regenerate your GitHub/GitLab tokens
+- ✅ Make sure tokens have the correct scopes (`repo` for GitHub, `write_repository` for GitLab)
+- ✅ For GitLab, ensure token has `api` scope as well
 
 **Cost:** Free for open source, $15/month for private repos (includes 6,000 build minutes)
 
