@@ -77,6 +77,10 @@ class RepoSyncer:
                          capture_output=True)
             subprocess.run(['git', 'remote', 'set-url', 'gitlab', gitlab_url])
             
+            # Fetch from GitLab to see what's there
+            print("Fetching from GitLab to check for conflicts...")
+            subprocess.run(['git', 'fetch', 'gitlab'], capture_output=True)
+            
             # Get all branches and push them
             result = subprocess.run(['git', 'branch', '-r'], capture_output=True, text=True)
             branches = []
@@ -89,14 +93,44 @@ class RepoSyncer:
                 try:
                     subprocess.run(['git', 'checkout', branch], check=True, capture_output=True)
                     
+                    # Check if GitLab has this branch and if it has different commits
+                    gitlab_branch_exists = subprocess.run(
+                        ['git', 'ls-remote', '--heads', 'gitlab', branch],
+                        capture_output=True, text=True
+                    ).stdout.strip()
+                    
+                    if gitlab_branch_exists:
+                        # GitLab has this branch - check if we need to merge
+                        print(f"  Checking branch {branch} for conflicts...")
+                        # Try to merge GitLab's version first (if it exists and differs)
+                        merge_result = subprocess.run(
+                            ['git', 'merge', f'gitlab/{branch}', '--no-edit', '--no-ff'],
+                            capture_output=True, text=True
+                        )
+                        # If merge fails, it's okay - we'll try force-with-lease
+                    
                     # Try to push with better error handling
                     result = subprocess.run(['git', 'push', 'gitlab', branch], 
                                           capture_output=True, text=True, check=False)
+                    
                     if result.returncode == 0:
                         print(f"  ✅ Synced branch: {branch}")
                     else:
                         error_msg = result.stderr or result.stdout
-                        if '403' in error_msg or 'Forbidden' in error_msg:
+                        if 'rejected' in error_msg and 'fetch first' in error_msg:
+                            # GitLab has commits we don't have - try force-with-lease (safer than force)
+                            print(f"  ⚠️  Branch {branch} rejected (GitLab has different commits)")
+                            print(f"     Attempting safe force push (--force-with-lease)...")
+                            force_result = subprocess.run(
+                                ['git', 'push', '--force-with-lease', 'gitlab', branch],
+                                capture_output=True, text=True, check=False
+                            )
+                            if force_result.returncode == 0:
+                                print(f"  ✅ Synced branch: {branch} (force pushed)")
+                            else:
+                                print(f"  ⚠️  Could not sync branch {branch} - GitLab has commits that conflict")
+                                print(f"     You may need to manually merge or resolve conflicts in GitLab")
+                        elif '403' in error_msg or 'Forbidden' in error_msg:
                             print(f"  ❌ Failed to sync branch {branch}: 403 Forbidden")
                             print(f"     This means your GitLab token doesn't have write permissions.")
                             print(f"     Fix: Create a new token with BOTH 'api' AND 'write_repository' scopes")
