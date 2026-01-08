@@ -1,15 +1,16 @@
 pipeline {
     agent any
     
+    // Webhook trigger (configure in Jenkins job) + polling as backup
     triggers {
-        pollSCM('H/5 * * * *')
+        pollSCM('H/15 * * * *')  // Backup polling every 15 minutes if webhook fails
     }
     
     environment {
         GITHUB_TOKEN = credentials('github-token')
         GITLAB_TOKEN = credentials('gitlab-token')
-        GITHUB_REPO = 'username/repo'
-        GITLAB_REPO = 'username/repo'
+        GITHUB_REPO = 'aminson49/git_gitlab_sync'
+        GITLAB_REPO = 'username/repo'  # Update this with your GitLab repo
     }
     
     stages {

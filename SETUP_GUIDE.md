@@ -17,18 +17,6 @@
 3. Check `api` and `write_repository` scopes
 4. Copy the token
 
-## CircleCI Setup
-
-1. Sign up at [circleci.com](https://circleci.com) and add your GitHub repo
-2. Project Settings → Environment Variables
-3. Add:
-   - `GITHUB_TOKEN` - your GitHub token
-   - `GITLAB_TOKEN` - your GitLab token
-   - `GITHUB_REPO` - format: `username/repo` (no .git)
-   - `GITLAB_REPO` - format: `username/repo` (no .git)
-4. Copy `.circleci/config.yml` to your repo
-5. Push to GitHub
-
 ## GitLab CI Setup
 
 1. Copy `.gitlab-ci.yml` to your GitLab repo
@@ -50,13 +38,7 @@ Note: This workflow is manual only - it won't run automatically on push.
 
 ## Jenkins Setup
 
-1. Copy `Jenkinsfile` to your GitHub repo
-2. Update `GITHUB_REPO` and `GITLAB_REPO` in the file
-3. In Jenkins, create credentials:
-   - `github-token` - your GitHub token
-   - `gitlab-token` - your GitLab token
-4. Create Pipeline job pointing to your repo
-5. Configure webhook or polling
+See [JENKINS_SETUP.md](JENKINS_SETUP.md) for detailed instructions on setting up Jenkins (hosted or self-hosted).
 
 ## Cron/Scheduled Tasks
 
