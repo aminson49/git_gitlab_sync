@@ -34,7 +34,15 @@ sync-to-github:
         exit 0
       fi
       
-      GITHUB_REPO_URL="${GITHUB_REPO_URL:-https://github.com/$CI_PROJECT_PATH.git}"
+      # Get GitHub repo URL - use GITHUB_REPO_URL variable if set, otherwise try to construct from CI_PROJECT_PATH
+      if [ -z "$GITHUB_REPO_URL" ]; then
+        echo "Warning: GITHUB_REPO_URL not set, using default based on project path"
+        echo "This might not match your actual GitHub repo"
+        echo "Set GITHUB_REPO_URL in Settings → CI/CD → Variables to the correct GitHub repo URL"
+        GITHUB_REPO_URL="https://github.com/$CI_PROJECT_PATH.git"
+      fi
+      
+      echo "Using GitHub repo URL: ${GITHUB_REPO_URL}"
       
       if ! git remote | grep -q github; then
         git remote add github "${GITHUB_REPO_URL}"
@@ -74,25 +82,51 @@ sync-to-github:
       git fetch github 2>&1 || echo "Note: Could not fetch from GitHub (repo may be empty)"
       
       echo "Pushing ${CURRENT_BRANCH} to GitHub..."
-      if git push github ${CURRENT_BRANCH}:${CURRENT_BRANCH}; then
+      push_output=$(git push github ${CURRENT_BRANCH}:${CURRENT_BRANCH} 2>&1)
+      push_exit_code=$?
+      
+      if [ $push_exit_code -eq 0 ]; then
         echo "✅ Successfully synced ${CURRENT_BRANCH} to GitHub"
       else
+        # Check for repository not found error
+        if echo "$push_output" | grep -q "Repository not found\|not found"; then
+          echo "❌ Error: GitHub repository not found"
+          echo "Current GitHub URL: ${GITHUB_REPO_URL}"
+          echo ""
+          echo "To fix:"
+          echo "1. Go to Settings → CI/CD → Variables"
+          echo "2. Add or update GITHUB_REPO_URL variable"
+          echo "3. Set it to your actual GitHub repo URL, e.g.:"
+          echo "   https://github.com/aminson49/git_gitlab_sync.git"
+          echo ""
+          echo "Or verify the token has access to the repository"
+          exit 1
+        fi
+        
         # Try handling conflicts
-        if git push github ${CURRENT_BRANCH}:${CURRENT_BRANCH} 2>&1 | grep -q "non-fast-forward\|rejected"; then
+        if echo "$push_output" | grep -q "non-fast-forward\|rejected"; then
           echo "Branches diverged, merging..."
           git fetch github ${CURRENT_BRANCH}
           git merge github/${CURRENT_BRANCH} -X ours -m "Merge from GitHub - kept GitLab version [skip sync]" || {
             echo "Merge failed"
             exit 1
           }
-          if git push github ${CURRENT_BRANCH}:${CURRENT_BRANCH}; then
+          push_again=$(git push github ${CURRENT_BRANCH}:${CURRENT_BRANCH} 2>&1)
+          if [ $? -eq 0 ]; then
             echo "✅ Synced after merge"
           else
-            echo "Push failed after merge"
-            exit 1
+            if echo "$push_again" | grep -q "Repository not found"; then
+              echo "❌ Error: GitHub repository not found after merge"
+              echo "Check GITHUB_REPO_URL variable is set correctly"
+              exit 1
+            else
+              echo "Push failed after merge"
+              exit 1
+            fi
           fi
         else
-          echo "Push failed - check token permissions"
+          echo "Push failed - check token permissions and repository URL"
+          echo "Error output: $push_output"
           exit 1
         fi
       fi
