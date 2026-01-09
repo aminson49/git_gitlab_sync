@@ -141,3 +141,8 @@ Add to crontab:
 - Check credentials IDs match exactly: `github-token` and `gitlab-token`
 - Verify repo names in Jenkinsfile are correct
 - If checkout fails, make sure you selected the "Username with password" credential in the pipeline job's Git SCM configuration
+
+**Merge conflicts:**
+- The script automatically handles merge conflicts by keeping GitHub's version
+- If you see conflict messages in the logs, that's normal - the script resolves them automatically
+- GitHub is always treated as the source of truth, so GitLab will be updated to match GitHub

@@ -1,5 +1,6 @@
 name: Sync to GitLab
 
+# Manual only - GitHub won't auto-run workflows
 on:
   workflow_dispatch:
 
@@ -24,4 +25,3 @@ jobs:
           GITHUB_REPO: ${{ secrets.GITHUB_REPO }}
           GITLAB_REPO: ${{ secrets.GITLAB_REPO }}
         run: python sync_repos.py code github-to-gitlab
-

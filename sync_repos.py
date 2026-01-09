@@ -210,22 +210,88 @@ class RepoSyncer:
                                     capture_output=True, text=True, check=False
                                 )
                                 
+                                # Handle merge conflicts explicitly
                                 if merge_result.returncode != 0:
-                                    # If merge fails, abort and try again
-                                    subprocess.run(['git', 'merge', '--abort'], capture_output=True, check=False)
-                                    # Reset again to GitHub
-                                    subprocess.run(['git', 'reset', '--hard', f'origin/{branch}'], capture_output=True)
-                                    # Create commit
-                                    subprocess.run(['git', 'add', '-A'], capture_output=True)
-                                    subprocess.run(
-                                        ['git', 'commit', '-m', f'Sync from GitHub - exact match [skip sync]'],
-                                        capture_output=True, text=True, check=False
+                                    merge_output = merge_result.stderr or merge_result.stdout
+                                    
+                                    # Check if we're in a merge conflict state
+                                    conflict_check = subprocess.run(
+                                        ['git', 'status', '--porcelain'],
+                                        capture_output=True, text=True, check=True
                                     )
-                                    # Try merge again
-                                    merge_result = subprocess.run(
-                                        ['git', 'merge', f'gitlab/{branch}', '--no-edit', '--no-ff', '--allow-unrelated-histories', '-X', 'ours'],
-                                        capture_output=True, text=True, check=False
-                                    )
+                                    
+                                    if 'CONFLICT' in merge_output or 'conflict' in merge_output.lower() or '<<<<<<<' in conflict_check.stdout:
+                                        print(f"     Merge conflicts detected, resolving by keeping GitHub version...")
+                                        
+                                        # Abort current merge
+                                        subprocess.run(['git', 'merge', '--abort'], capture_output=True, check=False)
+                                        
+                                        # Reset to GitHub version
+                                        subprocess.run(['git', 'reset', '--hard', f'origin/{branch}'], capture_output=True)
+                                        
+                                        # Create commit matching GitHub exactly
+                                        subprocess.run(['git', 'add', '-A'], capture_output=True)
+                                        subprocess.run(
+                                            ['git', 'commit', '-m', f'Sync from GitHub - exact match [skip sync]'],
+                                            capture_output=True, text=True, check=False
+                                        )
+                                        
+                                        # Try merge again with ours strategy
+                                        merge_result = subprocess.run(
+                                            ['git', 'merge', f'gitlab/{branch}', '--no-edit', '--no-ff', '--allow-unrelated-histories', '-X', 'ours'],
+                                            capture_output=True, text=True, check=False
+                                        )
+                                        
+                                        # If still conflicts, explicitly resolve by keeping our version (GitHub)
+                                        if merge_result.returncode != 0:
+                                            conflict_status = subprocess.run(
+                                                ['git', 'status', '--porcelain'],
+                                                capture_output=True, text=True, check=True
+                                            )
+                                            
+                                            if 'UU' in conflict_status.stdout or 'AA' in conflict_status.stdout or 'DD' in conflict_status.stdout:
+                                                print(f"     Explicitly resolving conflicts by keeping GitHub version...")
+                                                
+                                                # Get list of conflicted files
+                                                conflicted_files = subprocess.run(
+                                                    ['git', 'diff', '--name-only', '--diff-filter=U'],
+                                                    capture_output=True, text=True, check=True
+                                                )
+                                                
+                                                # For each conflicted file, keep our version (GitHub)
+                                                for file in conflicted_files.stdout.strip().split('\n'):
+                                                    if file.strip():
+                                                        print(f"       Resolving conflict in {file.strip()} (keeping GitHub version)")
+                                                        subprocess.run(
+                                                            ['git', 'checkout', '--ours', file.strip()],
+                                                            capture_output=True, check=False
+                                                        )
+                                                        subprocess.run(['git', 'add', file.strip()], capture_output=True)
+                                                
+                                                # Complete the merge
+                                                subprocess.run(
+                                                    ['git', 'commit', '-m', f'Merge GitLab branch - resolved conflicts by keeping GitHub version [skip sync]'],
+                                                    capture_output=True, text=True, check=False
+                                                )
+                                                merge_result.returncode = 0  # Mark as successful
+                                            else:
+                                                # If merge still failed for other reasons, abort and reset
+                                                subprocess.run(['git', 'merge', '--abort'], capture_output=True, check=False)
+                                                subprocess.run(['git', 'reset', '--hard', f'origin/{branch}'], capture_output=True)
+                                                subprocess.run(['git', 'add', '-A'], capture_output=True)
+                                                subprocess.run(
+                                                    ['git', 'commit', '-m', f'Sync from GitHub - exact match [skip sync]'],
+                                                    capture_output=True, text=True, check=False
+                                                )
+                                    else:
+                                        # Merge failed for other reasons, abort and reset
+                                        subprocess.run(['git', 'merge', '--abort'], capture_output=True, check=False)
+                                        subprocess.run(['git', 'reset', '--hard', f'origin/{branch}'], capture_output=True)
+                                        subprocess.run(['git', 'add', '-A'], capture_output=True)
+                                        subprocess.run(
+                                            ['git', 'commit', '-m', f'Sync from GitHub - exact match [skip sync]'],
+                                            capture_output=True, text=True, check=False
+                                        )
                                 
                                 # After merge, ensure files match GitHub exactly (but keep the merge commit)
                                 print(f"     Ensuring files match GitHub exactly...")
@@ -305,6 +371,35 @@ class RepoSyncer:
                                             ['git', 'merge', f'gitlab/{branch}', '--no-edit', '--no-ff', '-X', 'ours'],
                                             capture_output=True, text=True, check=False
                                         )
+                                        
+                                        # Handle conflicts in second merge attempt
+                                        if merge_again.returncode != 0:
+                                            conflict_check = subprocess.run(
+                                                ['git', 'status', '--porcelain'],
+                                                capture_output=True, text=True, check=True
+                                            )
+                                            
+                                            if 'UU' in conflict_check.stdout or 'AA' in conflict_check.stdout:
+                                                print(f"     Resolving conflicts in second merge (keeping GitHub version)...")
+                                                conflicted_files = subprocess.run(
+                                                    ['git', 'diff', '--name-only', '--diff-filter=U'],
+                                                    capture_output=True, text=True, check=True
+                                                )
+                                                
+                                                for file in conflicted_files.stdout.strip().split('\n'):
+                                                    if file.strip():
+                                                        subprocess.run(
+                                                            ['git', 'checkout', '--ours', file.strip()],
+                                                            capture_output=True, check=False
+                                                        )
+                                                        subprocess.run(['git', 'add', file.strip()], capture_output=True)
+                                                
+                                                subprocess.run(
+                                                    ['git', 'commit', '-m', f'Merge GitLab branch - resolved conflicts [skip sync]'],
+                                                    capture_output=True, text=True, check=False
+                                                )
+                                                merge_again.returncode = 0
+                                        
                                         if merge_again.returncode == 0:
                                             # Ensure files still match GitHub exactly
                                             current_merge_files = subprocess.run(

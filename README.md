@@ -8,6 +8,29 @@ Works with regular GitHub/GitLab, GitHub Enterprise, and self-hosted GitLab.
 
 The script syncs code from one repo to another. It handles protected branches, merge conflicts, and keeps history intact. GitHub is treated as the source of truth when syncing GitHub → GitLab.
 
+### Merge Conflict Resolution
+
+When branches have diverged or there are merge conflicts, the script handles them automatically:
+
+1. **Detection**: When a push fails due to diverged branches or protected branch rules, the script detects this and starts conflict resolution.
+
+2. **Strategy**: Since GitHub is the source of truth, the script always keeps GitHub's version of files when conflicts occur.
+
+3. **Process**:
+   - Fetches the latest from both GitHub and GitLab
+   - Resets to match GitHub exactly
+   - Merges GitLab's branch using `-X ours` strategy (automatically keeps GitHub's version)
+   - If conflicts still occur, explicitly resolves them by:
+     - Detecting conflicted files using `git diff --diff-filter=U`
+     - For each conflicted file, using `git checkout --ours` to keep GitHub's version
+     - Staging and committing the resolved files
+   - Ensures final state matches GitHub exactly
+   - Pushes the merged result to GitLab
+
+4. **Result**: GitLab gets updated with GitHub's code, but GitLab's commit history is preserved through merge commits. This way you don't lose any history from either side.
+
+This approach ensures that even if someone makes changes directly on GitLab, those changes won't overwrite what's on GitHub - GitHub always wins in conflicts.
+
 ## Setup Options
 
 You can run this a few different ways:

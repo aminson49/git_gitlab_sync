@@ -1,6 +1,5 @@
-# GitLab CI/CD Pipeline to sync GitLab → GitHub
-# Works with github.com, GitHub Enterprise, or any GitHub instance
-# Set GITHUB_REPO_URL variable to your GitHub repo URL
+# Sync GitLab → GitHub
+# Set GITHUB_REPO_URL in CI/CD variables
 
 stages:
   - sync
@@ -14,24 +13,20 @@ sync-to-github:
     - git config --global user.name "GitLab CI"
   script:
     - |
-      # Prevent infinite loops by checking if this commit was already synced
+      # Skip if already synced
       if git log -1 --pretty=%B | grep -q "\[skip sync\]"; then
         echo "Skipping sync - commit marked with [skip sync]"
         exit 0
       fi
       
-      # Get GitHub repository URL from CI/CD variables
-      # Defaults to github.com but works with any GitHub instance if you set GITHUB_REPO_URL
       GITHUB_REPO_URL="${GITHUB_REPO_URL:-https://github.com/$CI_PROJECT_PATH.git}"
       
-      # Add GitHub as remote if not exists
       if ! git remote | grep -q github; then
         git remote add github "${GITHUB_REPO_URL}"
       else
         git remote set-url github "${GITHUB_REPO_URL}"
       fi
       
-      # Get current branch name
       CURRENT_BRANCH="${CI_COMMIT_REF_NAME#refs/heads/}"
       if [ -z "$CURRENT_BRANCH" ]; then
         CURRENT_BRANCH="${CI_COMMIT_BRANCH}"
@@ -43,13 +38,11 @@ sync-to-github:
       fi
       echo "Current branch: ${CURRENT_BRANCH}"
       
-      # Ensure we're on the correct branch
       git checkout -f ${CURRENT_BRANCH} || {
         echo "Error: Could not checkout branch ${CURRENT_BRANCH}"
         exit 1
       }
       
-      # Push to GitHub (with token authentication)
       if [ -n "$GITHUB_TOKEN" ]; then
         GITHUB_URL_WITH_TOKEN=$(echo "$GITHUB_REPO_URL" | sed "s|https://|https://${GITHUB_TOKEN}@|")
         git remote set-url github "${GITHUB_URL_WITH_TOKEN}"
@@ -57,21 +50,34 @@ sync-to-github:
         echo "Warning: GITHUB_TOKEN not set, push may fail"
       fi
       
-      # Fetch from GitHub to check remote state
       git fetch github 2>&1 || echo "Note: Could not fetch from GitHub (repo may be empty)"
       
-      # Push current branch to GitHub
       echo "Pushing ${CURRENT_BRANCH} to GitHub..."
       if git push github ${CURRENT_BRANCH}:${CURRENT_BRANCH}; then
         echo "✅ Successfully synced ${CURRENT_BRANCH} to GitHub"
       else
-        echo "❌ Failed to push ${CURRENT_BRANCH} to GitHub"
-        echo "Check that GITHUB_TOKEN has write permissions and the branch exists"
-        exit 1
+        # Try handling conflicts
+        if git push github ${CURRENT_BRANCH}:${CURRENT_BRANCH} 2>&1 | grep -q "non-fast-forward\|rejected"; then
+          echo "Branches diverged, merging..."
+          git fetch github ${CURRENT_BRANCH}
+          git merge github/${CURRENT_BRANCH} -X ours --no-edit || {
+            echo "Merge failed"
+            exit 1
+          }
+          if git push github ${CURRENT_BRANCH}:${CURRENT_BRANCH}; then
+            echo "✅ Synced after merge"
+          else
+            echo "Push failed after merge"
+            exit 1
+          fi
+        else
+          echo "Push failed - check token permissions"
+          exit 1
+        fi
       fi
   rules:
     - if: $CI_COMMIT_BRANCH
-      when: manual  # Change to 'on_success' for automatic sync
+      when: manual
 
 sync-from-github:
   stage: sync
@@ -82,18 +88,14 @@ sync-from-github:
     - git config --global user.name "GitLab CI"
   script:
     - |
-      # Get GitHub repository URL from CI/CD variables
-      # Defaults to github.com but works with any GitHub instance if you set GITHUB_REPO_URL
       GITHUB_REPO_URL="${GITHUB_REPO_URL:-https://github.com/$CI_PROJECT_PATH.git}"
       
-      # Add GitHub as remote if not exists
       if ! git remote | grep -q github; then
         git remote add github "${GITHUB_REPO_URL}"
       else
         git remote set-url github "${GITHUB_REPO_URL}"
       fi
       
-      # Fetch from GitHub
       if [ -n "$GITHUB_TOKEN" ]; then
         GITHUB_URL_WITH_TOKEN=$(echo "$GITHUB_REPO_URL" | sed "s|https://|https://${GITHUB_TOKEN}@|")
         git remote set-url github "${GITHUB_URL_WITH_TOKEN}"
@@ -101,16 +103,24 @@ sync-from-github:
       
       git fetch github
       
-      # Merge GitHub changes into current branch
       CURRENT_BRANCH=$(echo $CI_COMMIT_REF_NAME)
       git checkout ${CURRENT_BRANCH}
-      git merge github/${CURRENT_BRANCH} --no-edit || echo "Merge failed or no changes"
-      git push origin ${CURRENT_BRANCH} || echo "Push to GitLab failed"
       
-      echo "Synced from GitHub successfully"
+      if git merge github/${CURRENT_BRANCH} -X ours --no-edit; then
+        echo "Merged GitHub changes"
+      else
+        if git status --porcelain | grep -q "^UU\|^AA"; then
+          echo "Resolving conflicts..."
+          git checkout --ours .
+          git add -A
+          git commit -m "Merge from GitHub - kept GitLab version [skip sync]" || echo "No changes"
+        fi
+      fi
+      
+      git push origin ${CURRENT_BRANCH} || echo "Push failed"
+      echo "Done"
   rules:
     - if: $CI_PIPELINE_SOURCE == "schedule"
       when: manual
     - if: $CI_PIPELINE_SOURCE == "web"
       when: manual
-
