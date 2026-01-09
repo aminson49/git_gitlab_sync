@@ -131,7 +131,11 @@ sync-to-github:
         fi
       fi
   rules:
+    # Run on all branches (new and existing)
     - if: $CI_COMMIT_BRANCH
+      when: on_success
+    # Also run on branch creation
+    - if: $CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH
       when: on_success
 
 sync-from-github:

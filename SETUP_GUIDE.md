@@ -227,7 +227,10 @@ If your main repo is on GitLab:
      - If not set, it defaults to `https://github.com/$CI_PROJECT_PATH.git` which might not match your GitHub repo
 4. Push to GitLab and it'll automatically sync to GitHub
 
-The pipeline runs automatically on every push to any branch. It syncs GitLab → GitHub and handles conflicts by keeping GitLab's version (since GitLab is the source in this case).
+The pipeline runs automatically on every push to any branch (new or existing). It will:
+- Create new branches on GitHub if they don't exist yet
+- Update existing branches on GitHub with the latest from GitLab
+- Handle conflicts by keeping GitLab's version (since GitLab is the source in this case)
 
 **Note:** If you get "GITHUB_TOKEN is empty or not set" error:
 - If the variable is marked as "Protected", either uncheck "Protected" OR protect your branch
