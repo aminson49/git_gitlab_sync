@@ -85,6 +85,135 @@ Now when you push to GitHub, Jenkins will automatically sync to GitLab.
 
 **Note:** If Jenkins is local, you'll need ngrok or similar to expose it for webhooks. Or just use polling instead.
 
+### Setting up HTTPS for Jenkins on EC2
+
+If you want to use HTTPS (recommended for production), here's how to set it up with nginx and Let's Encrypt on EC2:
+
+**Prerequisites:**
+- EC2 instance with public IP or Elastic IP
+- Domain name pointing to your EC2 instance (or you can use the public IP, but domain is better)
+- Security group allowing inbound traffic on ports 80 and 443
+
+**EC2 Security Group Setup:**
+
+1. Go to EC2 → Security Groups → Select your instance's security group
+2. Add inbound rules:
+   - Type: HTTP, Port: 80, Source: 0.0.0.0/0
+   - Type: HTTPS, Port: 443, Source: 0.0.0.0/0
+3. Save rules
+
+**On Your EC2 Instance:**
+
+1. Install nginx:
+   ```bash
+   sudo apt update
+   sudo apt install nginx -y
+   ```
+
+2. Install certbot for Let's Encrypt:
+   ```bash
+   sudo apt install certbot python3-certbot-nginx -y
+   ```
+
+3. Create nginx config for Jenkins:
+   ```bash
+   sudo nano /etc/nginx/sites-available/jenkins
+   ```
+   
+   Add this (replace `your-domain.com` with your domain or use your EC2 public IP):
+   ```nginx
+   server {
+       listen 80;
+       server_name your-domain.com;  # or your EC2 public IP
+       
+       location / {
+           proxy_pass http://localhost:8080;
+           proxy_set_header Host $host;
+           proxy_set_header X-Real-IP $remote_addr;
+           proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+           proxy_set_header X-Forwarded-Proto $scheme;
+           proxy_read_timeout 90s;
+       }
+   }
+   ```
+
+4. Enable the site:
+   ```bash
+   sudo ln -s /etc/nginx/sites-available/jenkins /etc/nginx/sites-enabled/
+   sudo rm /etc/nginx/sites-enabled/default  # Remove default site if it exists
+   sudo nginx -t
+   sudo systemctl reload nginx
+   ```
+
+5. Get SSL certificate:
+   
+   **If you have a domain:**
+   ```bash
+   sudo certbot --nginx -d your-domain.com
+   ```
+   
+   **If you only have EC2 public IP (no domain):**
+   - You'll need to use a self-signed certificate, but GitHub webhooks won't work with it
+   - Better option: Get a free domain from services like Freenom, or use AWS Route 53
+   - Or use ngrok for testing (it provides HTTPS automatically)
+   
+   Certbot will automatically:
+   - Get the SSL certificate from Let's Encrypt
+   - Configure nginx for HTTPS
+   - Set up automatic HTTP to HTTPS redirect
+   - Configure auto-renewal
+
+6. Configure Jenkins to work behind proxy:
+   ```bash
+   sudo nano /etc/default/jenkins
+   ```
+   
+   Add or update this line:
+   ```
+   JENKINS_ARGS="--httpPort=8080 --httpListenAddress=127.0.0.1"
+   ```
+   
+   This makes Jenkins only listen on localhost (nginx handles external traffic).
+
+7. Configure Jenkins URL in Jenkins UI:
+   - Go to Manage Jenkins → Configure System
+   - Find "Jenkins URL" field
+   - Set it to: `https://your-domain.com` (or your HTTPS URL)
+   - Save
+
+8. Restart Jenkins:
+   ```bash
+   sudo systemctl restart jenkins
+   ```
+
+9. Test HTTPS:
+   - Open browser and go to `https://your-domain.com`
+   - You should see Jenkins login page over HTTPS
+
+10. Update GitHub webhook URL:
+    - Go to your GitHub repo → Settings → Webhooks
+    - Edit the webhook
+    - Change URL to: `https://your-domain.com/github-webhook/`
+    - Save
+
+**Auto-renewal:**
+Let's Encrypt certificates expire every 90 days. Certbot sets up auto-renewal automatically, but you can test it:
+```bash
+sudo certbot renew --dry-run
+```
+
+**If you don't have a domain:**
+- Option 1: Get a free domain (Freenom, etc.) and point it to your EC2 IP
+- Option 2: Use AWS Route 53 to register a domain
+- Option 3: Use ngrok for testing (provides HTTPS tunnel)
+- Option 4: Stick with HTTP (not recommended for production, and GitHub webhooks may have issues)
+
+**Troubleshooting:**
+- If certbot fails, make sure port 80 is open in security group
+- If nginx won't start, check config: `sudo nginx -t`
+- If Jenkins isn't accessible, check it's running: `sudo systemctl status jenkins`
+- Check nginx logs: `sudo tail -f /var/log/nginx/error.log`
+
 ## GitLab CI Setup
 
 If your main repo is on GitLab:
