@@ -81,3 +81,19 @@ python sync_repos.py code github-to-gitlab
 - Make sure tokens have access to both repos
 
 See [SETUP_GUIDE.md](SETUP_GUIDE.md) for more detailed setup instructions.
+
+## CircleCI Setup
+
+You can also use CircleCI to sync GitHub → GitLab automatically on push:
+
+1. Copy `.circleci/config.yml` to your GitHub repo (in `.circleci/` directory)
+2. Go to CircleCI → Your Project → Settings → Environment Variables
+3. Add these environment variables:
+   - `GITHUB_TOKEN` - Your GitHub personal access token
+   - `GITLAB_TOKEN` - Your GitLab access token
+   - `GITHUB_REPO` - Format: `username/repo`
+   - `GITLAB_REPO` - Format: `username/repo`
+   - `GITLAB_API_BASE` (optional) - Only if using self-hosted GitLab, default is `https://gitlab.com/api/v4`
+4. Push to GitHub and CircleCI will automatically sync to GitLab
+
+The CircleCI workflow triggers on pushes to the `main` branch. You can modify the branch filter in `.circleci/config.yml` if needed.
