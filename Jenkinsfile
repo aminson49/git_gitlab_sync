@@ -10,7 +10,7 @@ pipeline {
         GITHUB_TOKEN = credentials('github-token')
         GITLAB_TOKEN = credentials('gitlab-token')
         GITHUB_REPO = 'aminson49/git_gitlab_sync'
-        GITLAB_REPO = 'username/repo'  // Update this with your GitLab repo
+        GITLAB_REPO = 'poc-group1603702/gitlab_github_sync'
     }
     
     stages {
