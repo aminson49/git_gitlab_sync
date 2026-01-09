@@ -52,7 +52,7 @@ I'm running Jenkins on AWS EC2. Here's the quick version:
 
 ### Configure Jenkins
 
-1. Install plugins: GitHub plugin, GitHub Branch Source plugin, Git plugin, Pipeline plugin
+1. Install plugins: GitHub plugin, Git plugin, Pipeline plugin
 
 2. Create credentials:
    - Go to Manage Jenkins → Credentials → Global
@@ -77,7 +77,7 @@ I'm running Jenkins on AWS EC2. Here's the quick version:
 
 4. Set up webhook in GitHub:
    - Repo → Settings → Webhooks → Add webhook
-   - URL: `http://your-jenkins-ip:8080/github-webhook/`
+   - URL: `http://your-jenkins-ip:8080/github-webhook/` (or `https://your-domain.com/github-webhook/` if using HTTPS)
    - Events: Just push events
    - Add webhook
 
@@ -291,6 +291,20 @@ Add to crontab:
 - Check credentials IDs match exactly: `github-token` and `gitlab-token`
 - Verify repo names in Jenkinsfile are correct
 - If checkout fails, make sure you selected the "Username with password" credential in the pipeline job's Git SCM configuration
+
+**Pipeline not triggering:**
+- Make sure webhook is configured correctly in GitHub
+- Check "GitHub hook trigger for GITScm polling" is enabled in Jenkins job configuration
+- Verify webhook URL is accessible from GitHub (if local, use ngrok)
+- Check Jenkins logs for webhook delivery errors
+
+**Jenkins pipeline stuck/hanging:**
+- The pipeline now has a 30-minute timeout to prevent infinite hangs
+- Git operations have 5-minute timeouts to prevent network hangs
+- If a build is stuck, you can stop it manually in Jenkins
+- Check Jenkins logs for specific error messages
+- Common causes: network issues, credential problems, or very large repositories
+- If it keeps happening, check your network connection and GitLab/GitHub status
 
 **Merge conflicts:**
 - The script automatically handles merge conflicts by keeping GitHub's version

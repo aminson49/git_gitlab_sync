@@ -1,9 +1,10 @@
 pipeline {
     agent any
     
-    // Webhook trigger (configure in Jenkins job) + polling as backup
+    // Triggers for pipeline (works with webhooks and polling)
     triggers {
-        pollSCM('H/15 * * * *')  // Backup polling every 15 minutes if webhook fails
+        // Polling as backup if webhook fails - checks every 5 minutes
+        pollSCM('H/5 * * * *')
     }
     
     environment {
@@ -32,10 +33,12 @@ pipeline {
         
         stage('Sync GitHub to GitLab') {
             steps {
-                sh '''
-                    . ./venv/bin/activate
-                    python sync_repos.py code github-to-gitlab
-                '''
+                timeout(time: 30, unit: 'MINUTES') {
+                    sh '''
+                        . ./venv/bin/activate
+                        python sync_repos.py code github-to-gitlab
+                    '''
+                }
             }
         }
     }

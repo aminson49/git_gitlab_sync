@@ -9,6 +9,10 @@ import json
 import requests
 from datetime import datetime
 
+# Timeout for git operations (in seconds)
+GIT_TIMEOUT = 300  # 5 minutes
+API_TIMEOUT = 30   # 30 seconds for API calls
+
 # Get tokens and repo names from env vars
 GITHUB_TOKEN = os.getenv('GITHUB_TOKEN')
 GITLAB_TOKEN = os.getenv('GITLAB_TOKEN')
@@ -67,15 +71,20 @@ class RepoSyncer:
             # Clone if needed
             if not os.path.exists('.github_repo'):
                 print("Cloning GitHub repo...")
-                subprocess.run(['git', 'clone', github_url, '.github_repo'], check=True)
+                subprocess.run(['git', 'clone', github_url, '.github_repo'], check=True, timeout=GIT_TIMEOUT)
             
             os.chdir('.github_repo')
             
             # Set git user config for commits (needed for merges)
-            subprocess.run(['git', 'config', 'user.email', 'aminpriyam2499@gmail.com'], check=True)
-            subprocess.run(['git', 'config', 'user.name', 'Priyam Amin'], check=True)
+            subprocess.run(['git', 'config', 'user.email', 'aminpriyam2499@gmail.com'], check=True, timeout=10)
+            subprocess.run(['git', 'config', 'user.name', 'Priyam Amin'], check=True, timeout=10)
             
-            subprocess.run(['git', 'fetch', 'origin'], check=True)
+            # Configure git timeouts to prevent hanging
+            subprocess.run(['git', 'config', 'http.timeout', '300'], check=False, timeout=10)
+            subprocess.run(['git', 'config', 'http.postBuffer', '524288000'], check=False, timeout=10)
+            
+            print("Fetching from origin (GitHub)...")
+            subprocess.run(['git', 'fetch', 'origin'], check=True, timeout=GIT_TIMEOUT)
             
             # Add gitlab remote (ignore error if it exists)
             subprocess.run(['git', 'remote', 'add', 'gitlab', gitlab_url], 
@@ -84,7 +93,7 @@ class RepoSyncer:
             
             # Fetch from GitLab to see what's there
             print("Fetching from GitLab to check for conflicts...")
-            subprocess.run(['git', 'fetch', 'gitlab'], capture_output=True)
+            subprocess.run(['git', 'fetch', 'gitlab'], capture_output=True, timeout=GIT_TIMEOUT)
             
             # Get only branches from origin (GitHub), not gitlab remote
             result = subprocess.run(['git', 'branch', '-r'], capture_output=True, text=True)
@@ -135,17 +144,18 @@ class RepoSyncer:
                     
                     gitlab_branch_exists = subprocess.run(
                         ['git', 'ls-remote', '--heads', 'gitlab', branch],
-                        capture_output=True, text=True
+                        capture_output=True, text=True, timeout=30
                     ).stdout.strip()
                     
-                    result = subprocess.run(['git', 'push', 'gitlab', branch], 
-                                          capture_output=True, text=True, check=False)
+                    print(f"     Pushing {branch} to GitLab (timeout: {GIT_TIMEOUT}s)...")
+                    result = subprocess.run(['git', 'push', 'gitlab', branch],
+                                           capture_output=True, text=True, check=False, timeout=GIT_TIMEOUT)
                     
                     if result.returncode == 0:
                         # Verify push actually worked
                         verify_push = subprocess.run(
                             ['git', 'ls-remote', '--heads', 'gitlab', branch],
-                            capture_output=True, text=True, check=False
+                            capture_output=True, text=True, check=False, timeout=30
                         )
                         if verify_push.returncode == 0 and verify_push.stdout.strip():
                             print(f"  Synced branch: {branch}")
@@ -450,10 +460,10 @@ class RepoSyncer:
                                                     capture_output=True, text=True, check=False
                                                 )
                                 
-                                print(f"     Pushing to GitLab...")
+                                print(f"     Pushing to GitLab (timeout: {GIT_TIMEOUT}s)...")
                                 push_result = subprocess.run(
                                     ['git', 'push', 'gitlab', branch],
-                                    capture_output=True, text=True, check=False
+                                    capture_output=True, text=True, check=False, timeout=GIT_TIMEOUT
                                 )
                                 
                                 if push_result.returncode == 0:
@@ -521,7 +531,7 @@ class RepoSyncer:
             # Clone if needed
             if not os.path.exists('.gitlab_repo'):
                 print("Cloning GitLab repo...")
-                subprocess.run(['git', 'clone', gitlab_url, '.gitlab_repo'], check=True)
+                subprocess.run(['git', 'clone', gitlab_url, '.gitlab_repo'], check=True, timeout=GIT_TIMEOUT)
             
             os.chdir('.gitlab_repo')
             
@@ -529,7 +539,7 @@ class RepoSyncer:
             subprocess.run(['git', 'config', 'user.email', 'aminpriyam2499@gmail.com'], check=True)
             subprocess.run(['git', 'config', 'user.name', 'Priyam Amin'], check=True)
             
-            subprocess.run(['git', 'fetch', 'origin'], check=True)
+            subprocess.run(['git', 'fetch', 'origin'], check=True, timeout=GIT_TIMEOUT)
             subprocess.run(['git', 'remote', 'add', 'github', github_url], 
                          capture_output=True)
             subprocess.run(['git', 'remote', 'set-url', 'github', github_url])
@@ -545,7 +555,7 @@ class RepoSyncer:
             for branch in branches:
                 try:
                     subprocess.run(['git', 'checkout', branch], check=True, capture_output=True)
-                    subprocess.run(['git', 'push', 'github', branch], check=True)
+                    subprocess.run(['git', 'push', 'github', branch], check=True, timeout=GIT_TIMEOUT)
                     print(f"  Synced branch: {branch}")
                 except subprocess.CalledProcessError as e:
                     print(f"  Warning: Failed to sync branch {branch}: {e}")
@@ -575,7 +585,7 @@ class RepoSyncer:
         
         try:
             url = f"{GITHUB_API_BASE}/repos/{GITHUB_REPO}/issues"
-            response = requests.get(url, headers=self.github_headers, params={'state': 'all'})
+            response = requests.get(url, headers=self.github_headers, params={'state': 'all'}, timeout=API_TIMEOUT)
             if response.status_code != 200:
                 print(f"Error: Failed to get GitHub issues: {response.status_code}")
                 return
@@ -604,7 +614,7 @@ class RepoSyncer:
                     'labels': labels
                 }
                 
-                resp = requests.post(gitlab_issues_url, headers=self.gitlab_headers, json=data)
+                resp = requests.post(gitlab_issues_url, headers=self.gitlab_headers, json=data, timeout=API_TIMEOUT)
                 if resp.status_code == 201:
                     print(f"  Synced issue: {issue['title']}")
                 else:
@@ -626,7 +636,7 @@ class RepoSyncer:
                 return
             
             url = f"{GITLAB_API_BASE}/projects/{gitlab_project_id}/issues"
-            response = requests.get(url, headers=self.gitlab_headers, params={'state': 'all'})
+            response = requests.get(url, headers=self.gitlab_headers, params={'state': 'all'}, timeout=API_TIMEOUT)
             if response.status_code != 200:
                 print(f"Error: Failed to get GitLab issues: {response.status_code}")
                 return
@@ -657,7 +667,7 @@ class RepoSyncer:
         """Get the GitLab project ID - needed for API calls"""
         try:
             url = f"{GITLAB_API_BASE}/projects/{GITLAB_REPO.replace('/', '%2F')}"
-            response = requests.get(url, headers=self.gitlab_headers)
+            response = requests.get(url, headers=self.gitlab_headers, timeout=API_TIMEOUT)
             if response.status_code == 200:
                 return str(response.json()['id'])
         except Exception as e:
