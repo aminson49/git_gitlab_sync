@@ -1,39 +1,34 @@
 # GitHub and GitLab Sync
 
-Simple scripts to keep repos in sync between GitHub and GitLab. Works with regular GitHub/GitLab, GitHub Enterprise, and self-hosted GitLab instances.
+Simple Python script to keep repos in sync between GitHub and GitLab. I built this because I needed to keep code synced between both platforms and couldn't find a good existing solution.
 
-## Options
+Works with regular GitHub/GitLab, GitHub Enterprise, and self-hosted GitLab.
 
-There are a few ways to set this up depending on your needs:
+## How It Works
 
-1. **GitLab CI/CD** - Syncs GitLab → GitHub (if your main repo is on GitLab)
-2. **Jenkins** - Syncs GitHub → GitLab (works great, I use this one)
-3. **Cron/Task Scheduler** - Run the script on a schedule locally
-4. **Python script** - Just run it manually when needed
-5. **GitHub Actions** - Manual trigger only (GitHub doesn't let it auto-run for some reason)
+The script syncs code from one repo to another. It handles protected branches, merge conflicts, and keeps history intact. GitHub is treated as the source of truth when syncing GitHub → GitLab.
 
-## Quick Start
+## Setup Options
 
-### GitLab CI/CD
+You can run this a few different ways:
 
-If you're syncing from GitLab to GitHub:
+1. **Jenkins** - Set it up on a server, triggers automatically on git push (what I'm using)
+2. **GitLab CI/CD** - If your main repo is on GitLab, syncs to GitHub
+3. **Cron/Task Scheduler** - Run it on a schedule locally
+4. **Manual** - Just run the Python script when you need it
+5. **GitHub Actions** - Manual trigger only (GitHub security prevents auto-runs)
 
-1. Copy `.gitlab-ci.yml` to your GitLab repo
-2. Go to Settings → CI/CD → Variables
-3. Add `GITHUB_TOKEN` and `GITHUB_REPO_URL`
-4. Push to GitLab and it should trigger the sync
+## Quick Test
 
-### Local Python Script
-
-The easiest way to test it:
+Easiest way to test it locally:
 
 ```bash
 pip install -r requirements.txt
 
 export GITHUB_TOKEN="your_token"
 export GITLAB_TOKEN="your_token"
-export GITHUB_REPO="username/repo"
-export GITLAB_REPO="username/repo"
+export GITHUB_REPO="aminson49/git_gitlab_sync"
+export GITLAB_REPO="poc-group1603702/gitlab_github_sync"
 
 python sync_repos.py code github-to-gitlab
 ```
@@ -41,42 +36,25 @@ python sync_repos.py code github-to-gitlab
 ## Getting Tokens
 
 **GitHub:**
-- Go to Settings → Developer settings → Personal access tokens → Tokens (classic)
-- Make sure to check the `repo` scope, that's important
+- Settings → Developer settings → Personal access tokens → Tokens (classic)
+- Need the `repo` scope
 
 **GitLab:**
 - Preferences → Access Tokens
-- You need both `api` AND `write_repository` scopes (I learned this the hard way - just `api` isn't enough)
+- Need both `api` AND `write_repository` scopes (just `api` won't work - found that out the hard way)
 
-## Troubleshooting
+## Common Problems
 
 **403 Forbidden:**
-- GitLab token needs BOTH `api` AND `write_repository` scopes, not just one
-- Double check the token owner actually has access to the repo
+- Make sure your GitLab token has both `api` AND `write_repository` scopes
+- Check the token owner has access to the repo
 
 **Protected branch errors:**
-- The script tries to handle this automatically by merging
-- If it still fails, you might need to unprotect the branch temporarily or give your token permission to push to protected branches
+- Script tries to handle this by merging automatically
+- If it still fails, you might need to temporarily unprotect the branch or give your token permission to push to protected branches
 
 **Repository not found:**
-- Use the format `username/repo` (without .git or the full URL)
-- Make sure your tokens actually have access to both repos
+- Use format `username/repo` (no .git, no full URL)
+- Make sure tokens have access to both repos
 
-### GitHub Actions (Manual Only)
-
-GitHub Actions won't auto-run for security reasons, so you have to trigger it manually:
-
-1. Copy `.github/workflows/sync-to-gitlab.yml` to your GitHub repo
-2. Settings → Secrets and variables → Actions
-3. Add your secrets:
-   - `GITLAB_TOKEN`
-   - `GITHUB_REPO` (format: `username/repo`)
-   - `GITLAB_REPO` (format: `username/repo`)
-4. Go to Actions tab and manually run "Sync to GitLab"
-
-For more detailed setup, check out [SETUP_GUIDE.md](SETUP_GUIDE.md).
-
-## Additional Guides
-
-- **[JENKINS_SETUP.md](JENKINS_SETUP.md)** - How I set up Jenkins (works great for auto-syncing)
-- **[CONFLICT_RESOLUTION_TESTING.md](CONFLICT_RESOLUTION_TESTING.md)** - Testing different conflict scenarios I've run into
+See [SETUP_GUIDE.md](SETUP_GUIDE.md) for more detailed setup instructions.
