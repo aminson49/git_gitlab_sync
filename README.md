@@ -1,4 +1,4 @@
-# GitHub and GitLab Sync
+# GitHub and GitLab Sync.
 
 Simple Python script to keep repos in sync between GitHub and GitLab. I built this because I needed to keep code synced between both platforms and couldn't find a good existing solution.
 
