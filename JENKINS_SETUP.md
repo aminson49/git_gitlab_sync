@@ -34,22 +34,45 @@ Here's what I did step by step:
    - Port 22 for SSH
 4. Launch it and SSH in
 
+#### Install Java 17 (Required)
+
+Newer Jenkins versions (2.400+) require Java 17 or 21, not Java 11:
+
+```bash
+# Install Java 17
+sudo apt update
+sudo apt install openjdk-17-jdk -y
+
+# Verify installation
+java -version
+# Should show "openjdk version 17..."
+```
+
 #### Install Jenkins
 
 ```bash
-# For Ubuntu/Debian
-sudo apt update
-sudo apt install openjdk-11-jdk -y
+# Add Jenkins repository
 wget -q -O - https://pkg.jenkins.io/debian-stable/jenkins.io-2023.key | sudo apt-key add -
 sudo sh -c 'echo deb https://pkg.jenkins.io/debian-stable binary/ > /etc/apt/sources.list.d/jenkins.list'
 sudo apt update
 sudo apt install jenkins -y
+
+# Make sure Jenkins uses Java 17
+sudo update-alternatives --config java
+# Select Java 17 if prompted
+
+# Start Jenkins
 sudo systemctl start jenkins
 sudo systemctl enable jenkins
+
+# Wait a few seconds for Jenkins to initialize
+sleep 15
 
 # Get the initial password (you'll need this)
 sudo cat /var/lib/jenkins/secrets/initialAdminPassword
 ```
+
+**Note:** If you already installed Java 11, you can install Java 17 alongside it and Jenkins will use 17 automatically.
 
 #### Initial Jenkins Setup
 
