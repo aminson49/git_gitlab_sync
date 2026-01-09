@@ -391,3 +391,94 @@ The "Secret text" credentials (`github-token` and `gitlab-token`) are still need
 - **Jenkinsfile `credentials('github-token')`:** Needs "Secret text" type
 
 These are two different things!
+
+## Python/pip Not Found Error
+
+If you see errors like `pip: not found` or `pip3: not found` in the build logs, Python isn't installed on your Jenkins server.
+
+### Quick Fix
+
+SSH into your Jenkins server and install Python:
+
+```bash
+# Install Python 3 and pip
+sudo apt update
+sudo apt install python3 python3-pip -y
+
+# Verify it's installed
+python3 --version
+pip3 --version
+```
+
+### Verify Jenkins Can Access Python
+
+After installing, test that Jenkins can find it:
+
+```bash
+# Check if Jenkins user can access Python
+sudo -u jenkins python3 --version
+sudo -u jenkins pip3 --version
+```
+
+If those work, your next build should succeed. The Jenkinsfile uses `pip3` which should now be available.
+
+### Alternative: Update Jenkinsfile to Use Full Path
+
+If Python is installed but not in PATH for Jenkins, you can update the Jenkinsfile to use the full path:
+
+```groovy
+stage('Install Dependencies') {
+    steps {
+        sh '/usr/bin/pip3 install -r requirements.txt'
+    }
+}
+```
+
+But usually just installing Python3 and pip3 is enough.
+
+## "externally-managed-environment" Error
+
+If you see this error, it means you're on a newer Ubuntu/Debian system (Python 3.12+) that prevents system-wide pip installs. This is a security feature.
+
+### Solution: Use Virtual Environment
+
+The Jenkinsfile has been updated to use a virtual environment. But if you need to fix it manually, update the Jenkinsfile:
+
+```groovy
+stage('Install Dependencies') {
+    steps {
+        sh '''
+            python3 -m venv venv
+            source venv/bin/activate
+            pip install -r requirements.txt
+        '''
+    }
+}
+
+stage('Sync GitHub to GitLab') {
+    steps {
+        sh '''
+            source venv/bin/activate
+            python sync_repos.py code github-to-gitlab
+        '''
+    }
+}
+```
+
+### Alternative: Install python3-venv Package
+
+If `python3 -m venv` doesn't work, you might need to install the venv package:
+
+```bash
+sudo apt install python3-venv -y
+```
+
+### Quick Workaround (Not Recommended)
+
+If you really need to install system-wide (not recommended), you can use:
+
+```bash
+pip3 install --break-system-packages -r requirements.txt
+```
+
+But using a virtual environment is the proper way to handle this.

@@ -48,6 +48,23 @@ java -version
 # Should show "openjdk version 17..."
 ```
 
+#### Install Python and pip (Required for the sync script)
+
+The pipeline needs Python to run the sync script:
+
+```bash
+# Install Python 3, pip, and venv (needed for virtual environments)
+sudo apt update
+sudo apt install python3 python3-pip python3-venv -y
+
+# Verify installation
+python3 --version
+pip3 --version
+python3 -m venv --help
+```
+
+**Note:** Newer Ubuntu versions (Python 3.12+) require using virtual environments for pip installs. The Jenkinsfile uses a venv automatically.
+
 #### Install Jenkins
 
 ```bash
