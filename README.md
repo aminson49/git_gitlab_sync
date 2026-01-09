@@ -1,4 +1,4 @@
-# GitHub and GitLab Sync
+# GitHub and GitLab Sync.
 
 Scripts to keep repos in sync between GitHub and GitLab. Works with regular GitHub/GitLab, GitHub Enterprise, and self-hosted GitLab.
 
