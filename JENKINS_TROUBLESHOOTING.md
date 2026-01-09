@@ -237,6 +237,75 @@ sudo journalctl -xeu jenkins.service --no-pager | tail -50
 
 That will show the exact error.
 
+## Can't Login After Restart
+
+If you can't login after restarting Jenkins, here's how to fix it:
+
+### Option 1: Use Initial Admin Password (If Setup Not Complete)
+
+If you never finished the initial Jenkins setup:
+
+```bash
+# Get the initial admin password
+sudo cat /var/lib/jenkins/secrets/initialAdminPassword
+```
+
+Then:
+1. Go to `http://your-ec2-ip:8080`
+2. Username: `admin` (or leave blank)
+3. Password: Paste the password from above
+4. Complete the setup wizard
+
+### Option 2: Disable Security Temporarily (Quick Fix)
+
+If you already set up Jenkins but forgot your password:
+
+```bash
+# Backup the config
+sudo cp /var/lib/jenkins/config.xml /var/lib/jenkins/config.xml.backup
+
+# Disable security
+sudo sed -i 's/<useSecurity>true<\/useSecurity>/<useSecurity>false<\/useSecurity>/g' /var/lib/jenkins/config.xml
+
+# Restart Jenkins
+sudo systemctl restart jenkins
+
+# Wait a few seconds
+sleep 10
+```
+
+Now you can access Jenkins without a password. Then:
+1. Go to Manage Jenkins → Configure Global Security
+2. Enable "Jenkins' own user database"
+3. Enable "Allow users to sign up"
+4. Click Save
+5. Click "Sign up" (top right) and create a new admin account
+6. Go back to Configure Global Security and add yourself with admin permissions
+7. Disable "Allow users to sign up" for security
+
+### Option 3: Reset to Initial Setup
+
+If nothing works, you can reset Jenkins (this deletes all jobs and config):
+
+```bash
+# Stop Jenkins
+sudo systemctl stop jenkins
+
+# Remove Jenkins data
+sudo rm -rf /var/lib/jenkins/*
+
+# Start Jenkins
+sudo systemctl start jenkins
+
+# Wait for initialization
+sleep 15
+
+# Get new initial password
+sudo cat /var/lib/jenkins/secrets/initialAdminPassword
+```
+
+Then go through the setup wizard again.
+
 ## "Start request repeated too quickly" Error
 
 If you see this error, it means Jenkins crashed immediately. Systemd prevents restart loops. To see the actual error:
@@ -278,3 +347,47 @@ sudo grep JAVA /etc/default/jenkins
 ```
 
 If Java isn't found, Jenkins will exit immediately.
+
+## Credentials Not Showing in Dropdown
+
+If you created credentials but they don't appear in the dropdown when configuring a job, here's why:
+
+### The Problem
+
+There are different types of credentials for different purposes:
+- **"Secret text"** - Used in Jenkinsfile with `credentials('id')` for environment variables
+- **"Username with password"** - Used for Git SCM to access repositories
+- **"SSH Username with private key"** - Used for SSH Git access
+
+If you created "Secret text" credentials, they won't show up in the Git SCM credentials dropdown because that dropdown only shows credentials that can authenticate to Git (Username/password or SSH).
+
+### Solution
+
+**For Git SCM (Repository Access):**
+
+1. Go to Manage Jenkins → Credentials → System → Global credentials
+2. Click "+ Add Credentials"
+3. Select **"Username with password"** (not "Secret text")
+4. Fill in:
+   - **Username:** Your GitHub username (or just `git` if using token)
+   - **Password:** Your GitHub personal access token
+   - **ID:** `github-repo-access` (or any name)
+   - **Description:** GitHub Repo Access
+5. Click OK
+
+Now this credential will appear in the Git SCM credentials dropdown.
+
+**For Public Repos:**
+
+If your GitHub repo is public, you don't need credentials for Git SCM. Just leave it as "- none -" in the dropdown.
+
+**For Jenkinsfile Environment Variables:**
+
+The "Secret text" credentials (`github-token` and `gitlab-token`) are still needed and correct - they're used by the sync script, not for Git access.
+
+### Quick Check
+
+- **Git SCM dropdown:** Needs "Username with password" type
+- **Jenkinsfile `credentials('github-token')`:** Needs "Secret text" type
+
+These are two different things!

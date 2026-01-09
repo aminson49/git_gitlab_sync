@@ -106,19 +106,39 @@ In the configuration:
 - **Pipeline section:** Select "Pipeline script from SCM"
 - **SCM:** Choose Git
 - **Repository URL:** `https://github.com/aminson49/git_gitlab_sync.git` (or your repo)
+- **Credentials:** 
+  - If repo is **public**: Leave as "- none -"
+  - If repo is **private**: Select the "Username with password" credential you created (e.g., `github-repo-access`)
 - **Branch:** `*/main` (or `*/master` if that's your default branch)
 - **Script Path:** `Jenkinsfile`
 - Save it
 
 #### Add Your Credentials
 
+You need to create credentials in two places:
+
+**1. For Git SCM (Repository Access):**
+
 Go to Manage Jenkins → Credentials → System → Global credentials
+
+Click "+ Add Credentials" and create:
+- **Kind:** Username with password
+- **Username:** Your GitHub username (or `git` for token-based auth)
+- **Password:** Your GitHub personal access token
+- **ID:** `github-repo-access` (or any name you want)
+- **Description:** GitHub Repo Access
+
+**Note:** If your GitHub repo is public, you can skip this and leave credentials as "- none -" in the pipeline config.
+
+**2. For Jenkinsfile Environment Variables:**
 
 Add two "Secret text" credentials:
 1. ID: `github-token` (this exact name - the Jenkinsfile looks for this)
+   - Secret: Your GitHub personal access token
 2. ID: `gitlab-token` (also exact)
+   - Secret: Your GitLab access token
 
-Paste your actual tokens in the Secret field. The IDs have to match exactly what's in your Jenkinsfile.
+These are used by the sync script inside the pipeline, not for Git access.
 
 #### Set Up GitHub Webhook
 
