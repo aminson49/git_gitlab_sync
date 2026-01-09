@@ -49,6 +49,13 @@ sync-to-github:
         exit 1
       fi
       
+      # Check if token looks valid (GitHub tokens usually start with ghp_ for classic tokens)
+      if ! echo "$GITHUB_TOKEN" | grep -qE "^ghp_|^github_pat_"; then
+        echo "Warning: GITHUB_TOKEN doesn't look like a valid GitHub token"
+        echo "GitHub tokens usually start with 'ghp_' (classic) or 'github_pat_' (fine-grained)"
+        echo "Make sure you set the actual token value, not a descriptive name"
+      fi
+      
       GITHUB_URL_WITH_TOKEN=$(echo "$GITHUB_REPO_URL" | sed "s|https://|https://${GITHUB_TOKEN}@|")
       git remote set-url github "${GITHUB_URL_WITH_TOKEN}"
       
