@@ -220,8 +220,19 @@ If your main repo is on GitLab:
 
 1. Copy `.gitlab-ci.yml` to your GitLab repo
 2. Settings → CI/CD → Variables
-3. Add `GITHUB_TOKEN` and `GITHUB_REPO_URL`
-4. Push to GitLab and it'll trigger
+3. Add these variables:
+   - `GITHUB_TOKEN` - Your GitHub personal access token
+   - `GITHUB_REPO_URL` (optional) - GitHub repo URL, defaults to `https://github.com/$CI_PROJECT_PATH.git`
+4. Push to GitLab and it'll automatically sync to GitHub
+
+The pipeline runs automatically on every push to any branch. It syncs GitLab → GitHub and handles conflicts by keeping GitLab's version (since GitLab is the source in this case).
+
+**Important:** If you're also using Jenkins or CircleCI to sync GitHub → GitLab, make sure only one direction is automated to avoid infinite loops. For example:
+- Use GitLab CI to sync GitLab → GitHub (automated)
+- Use Jenkins/CircleCI to sync GitHub → GitLab (automated)
+- But don't automate both directions at the same time, or you'll create a loop
+
+The `[skip sync]` check helps prevent loops, but it's safer to only automate one direction.
 
 ## GitHub Actions
 

@@ -36,10 +36,11 @@ This approach ensures that even if someone makes changes directly on GitLab, tho
 You can run this a few different ways:
 
 1. **Jenkins** - Set it up on a server, triggers automatically on git push (what I'm using)
-2. **GitLab CI/CD** - If your main repo is on GitLab, syncs to GitHub
-3. **Cron/Task Scheduler** - Run it on a schedule locally
-4. **Manual** - Just run the Python script when you need it
-5. **GitHub Actions** - Manual trigger only (GitHub security prevents auto-runs)
+2. **GitLab CI/CD** - If your main repo is on GitLab, syncs to GitHub automatically on push
+3. **CircleCI** - Syncs GitHub → GitLab automatically on push
+4. **Cron/Task Scheduler** - Run it on a schedule locally
+5. **Manual** - Just run the Python script when you need it
+6. **GitHub Actions** - Manual trigger only (GitHub security prevents auto-runs)
 
 ## Quick Test
 
