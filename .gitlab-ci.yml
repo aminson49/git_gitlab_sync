@@ -43,12 +43,14 @@ sync-to-github:
         exit 1
       }
       
-      if [ -n "$GITHUB_TOKEN" ]; then
-        GITHUB_URL_WITH_TOKEN=$(echo "$GITHUB_REPO_URL" | sed "s|https://|https://${GITHUB_TOKEN}@|")
-        git remote set-url github "${GITHUB_URL_WITH_TOKEN}"
-      else
-        echo "Warning: GITHUB_TOKEN not set, push may fail"
+      if [ -z "$GITHUB_TOKEN" ]; then
+        echo "Error: GITHUB_TOKEN environment variable is not set"
+        echo "Please set GITHUB_TOKEN in GitLab CI/CD Variables (Settings → CI/CD → Variables)"
+        exit 1
       fi
+      
+      GITHUB_URL_WITH_TOKEN=$(echo "$GITHUB_REPO_URL" | sed "s|https://|https://${GITHUB_TOKEN}@|")
+      git remote set-url github "${GITHUB_URL_WITH_TOKEN}"
       
       git fetch github 2>&1 || echo "Note: Could not fetch from GitHub (repo may be empty)"
       
