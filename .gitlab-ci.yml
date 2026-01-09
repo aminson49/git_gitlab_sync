@@ -13,6 +13,21 @@ sync-to-github:
     - git config --global user.name "GitLab CI"
   script:
     - |
+      # Debug: Check if variables are available
+      echo "Checking environment variables..."
+      if [ -z "$GITHUB_TOKEN" ]; then
+        echo "GITHUB_TOKEN is empty or not set"
+        echo "Available CI variables:"
+        env | grep -i "CI_" | head -10 || echo "No CI variables found"
+        echo ""
+        echo "If GITHUB_TOKEN is marked as 'Protected' in GitLab, make sure:"
+        echo "1. The branch '${CI_COMMIT_REF_NAME}' is a protected branch, OR"
+        echo "2. Uncheck 'Protected' for the GITHUB_TOKEN variable in Settings → CI/CD → Variables"
+        exit 1
+      else
+        echo "GITHUB_TOKEN is set (length: ${#GITHUB_TOKEN} characters)"
+      fi
+      
       # Skip if already synced
       if git log -1 --pretty=%B | grep -q "\[skip sync\]"; then
         echo "Skipping sync - commit marked with [skip sync]"
@@ -43,17 +58,14 @@ sync-to-github:
         exit 1
       }
       
-      if [ -z "$GITHUB_TOKEN" ]; then
-        echo "Error: GITHUB_TOKEN environment variable is not set"
-        echo "Please set GITHUB_TOKEN in GitLab CI/CD Variables (Settings → CI/CD → Variables)"
-        exit 1
-      fi
-      
       # Check if token looks valid (GitHub tokens usually start with ghp_ for classic tokens)
       if ! echo "$GITHUB_TOKEN" | grep -qE "^ghp_|^github_pat_"; then
-        echo "Warning: GITHUB_TOKEN doesn't look like a valid GitHub token"
+        echo "⚠️  Warning: GITHUB_TOKEN doesn't look like a valid GitHub token"
         echo "GitHub tokens usually start with 'ghp_' (classic) or 'github_pat_' (fine-grained)"
         echo "Make sure you set the actual token value, not a descriptive name"
+        echo "Token length: ${#GITHUB_TOKEN} characters"
+      else
+        echo "✓ GITHUB_TOKEN format looks valid"
       fi
       
       GITHUB_URL_WITH_TOKEN=$(echo "$GITHUB_REPO_URL" | sed "s|https://|https://${GITHUB_TOKEN}@|")
